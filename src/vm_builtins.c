@@ -1465,6 +1465,16 @@ static RValue builtin_is_real(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t
     return RValue_makeBool(result);
 }
 
+static RValue builtin_is_nan(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeBool(false);
+    return RValue_makeBool(args[0].type == RVALUE_REAL && isnan(RValue_toReal(args[0])));
+}
+
+static RValue builtin_is_infinity(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeBool(false);
+    return RValue_makeBool(args[0].type == RVALUE_REAL && isinf(RValue_toReal(args[0])));
+}
+
 static RValue builtin_is_bool(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) return RValue_makeBool(false);
     return RValue_makeBool(args[0].type == RVALUE_BOOL);
@@ -9762,6 +9772,8 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "real", builtin_real);
     VM_registerBuiltin(ctx, "is_string", builtin_is_string);
     VM_registerBuiltin(ctx, "is_real", builtin_is_real);
+    VM_registerBuiltin(ctx, "is_nan", builtin_is_nan);
+    VM_registerBuiltin(ctx, "is_infinity", builtin_is_infinity);
     VM_registerBuiltin(ctx, "is_numeric", builtin_is_real);
     VM_registerBuiltin(ctx, "is_bool", builtin_is_bool);
     VM_registerBuiltin(ctx, "is_array", builtin_is_array);
