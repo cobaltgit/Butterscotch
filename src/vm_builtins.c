@@ -8503,7 +8503,7 @@ static RValue builtin_tile_add(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_
     RoomTile* tile = &room->tiles[room->tileCount];
     tile->x = RValue_toInt32(args[5]);
     tile->y = RValue_toInt32(args[6]);
-    tile->useSpriteDefinition = DataWin_isVersionAtLeast(runner->dataWin, 2, 0, 0, 0);
+    tile->useSpriteDefinition = false; // Will never be true because this function is only available for pre-GM:S 2 games
     tile->backgroundDefinition = backgroundIndex;
     tile->sourceX = RValue_toInt32(args[1]);
     tile->sourceY = RValue_toInt32(args[2]);
