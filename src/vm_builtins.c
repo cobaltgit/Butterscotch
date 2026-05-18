@@ -8858,6 +8858,24 @@ static RValue builtin_tile_layer_delete(VMContext* ctx, RValue* args, MAYBE_UNUS
     return RValue_makeUndefined();
 }
 
+// tile_delete(id) - removes the tile with the given id from the current room.
+static RValue builtin_tile_delete(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    Room* room = runner->currentRoom;
+    if (room == nullptr) return RValue_makeUndefined();
+    uint32_t id = (uint32_t) RValue_toInt32(args[0]);
+    repeat(room->tileCount, i) {
+        if (room->tiles[i].instanceID != id) continue;
+        uint32_t tailLen = room->tileCount - i - 1;
+        if (tailLen > 0) memmove(&room->tiles[i], &room->tiles[i + 1], tailLen * sizeof(RoomTile));
+        room->tileCount--;
+        runner->drawableListStructureDirty = true;
+        return RValue_makeUndefined();
+    }
+    fprintf(stderr, "VM: tile_delete: tile does not exist (%u)\n", id);
+    return RValue_makeUndefined();
+}
+
 // tile_get_ids_at_depth(depth) - returns a 1D array of tile ids whose tileDepth matches.
 static RValue builtin_tile_get_ids_at_depth(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
@@ -11172,6 +11190,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
         VM_registerBuiltin(ctx, "tile_exists", builtin_tile_exists);
         VM_registerBuiltin(ctx, "tile_layer_find", builtin_tile_layer_find);
         VM_registerBuiltin(ctx, "tile_layer_delete", builtin_tile_layer_delete);
+        VM_registerBuiltin(ctx, "tile_delete", builtin_tile_delete);
         VM_registerBuiltin(ctx, "tile_get_ids_at_depth", builtin_tile_get_ids_at_depth);
     }
 
