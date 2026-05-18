@@ -27,6 +27,7 @@
 #include "audio_system.h"
 #include "file_system.h"
 #include "md5.h"
+#include "base64.h"
 
 #include "clock_gettime_macos.h"
 
@@ -6309,6 +6310,28 @@ static RValue builtin_buffer_save(MAYBE_UNUSED VMContext* ctx, RValue* args, MAY
 
 STUB_RETURN_ZERO(buffer_base64_encode)
 
+static RValue builtin_base64_encode(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (1 > argCount) return RValue_makeOwnedString(safeStrdup(""));
+    char* input = RValue_toString(args[0]);
+    unsigned int inLen = (unsigned int) strlen(input);
+    char* out = safeMalloc(BASE64_ENCODE_OUT_SIZE(inLen));
+    base64_encode((const unsigned char*) input, inLen, out);
+    free(input);
+    return RValue_makeOwnedString(out);
+}
+
+static RValue builtin_base64_decode(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (1 > argCount) return RValue_makeOwnedString(safeStrdup(""));
+    char* input = RValue_toString(args[0]);
+    unsigned int inLen = (unsigned int) strlen(input);
+    unsigned int outCap = BASE64_DECODE_OUT_SIZE(inLen);
+    unsigned char* out = safeMalloc(outCap + 1);
+    unsigned int outLen = base64_decode(input, inLen, out);
+    out[outLen] = '\0';
+    free(input);
+    return RValue_makeOwnedString((char*) out);
+}
+
 // buffer_md5(buffer, offset, size) -> hex string (32 chars, lowercase). Uses the RFC 1321 reference impl in vendor/md5.
 static RValue builtin_buffer_md5(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
@@ -11074,6 +11097,8 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "buffer_load", builtin_buffer_load);
     VM_registerBuiltin(ctx, "buffer_save", builtin_buffer_save);
     VM_registerBuiltin(ctx, "buffer_base64_encode", builtin_buffer_base64_encode);
+    VM_registerBuiltin(ctx, "base64_encode", builtin_base64_encode);
+    VM_registerBuiltin(ctx, "base64_decode", builtin_base64_decode);
     VM_registerBuiltin(ctx, "buffer_md5", builtin_buffer_md5);
     VM_registerBuiltin(ctx, "buffer_get_surface", builtin_buffer_get_surface);
 

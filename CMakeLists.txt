@@ -132,6 +132,10 @@ target_include_directories(butterscotch PUBLIC vendor/stb/ds)
 target_sources(butterscotch PRIVATE vendor/md5/md5.c)
 target_include_directories(butterscotch PUBLIC vendor/md5)
 
+# Base64 implementation
+target_sources(butterscotch PRIVATE vendor/base64/base64.c)
+target_include_directories(butterscotch PUBLIC vendor/base64)
+
 if(PLATFORM STREQUAL "glfw")
     if (NOT ENABLE_LEGACY_GL AND NOT ENABLE_MODERN_GL)
         message(FATAL_ERROR "GLFW requires at least one GL version!")
