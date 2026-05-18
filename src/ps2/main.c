@@ -437,6 +437,9 @@ int main(int argc, char* argv[]) {
     shfree(eagerRooms);
 
     bool bytecodeVersionSupported = false;
+#ifdef ENABLE_BC14
+    if (dataWin->gen8.bytecodeVersion == 13 || dataWin->gen8.bytecodeVersion == 14) bytecodeVersionSupported = true;
+#endif
 #ifdef ENABLE_BC16
     if (dataWin->gen8.bytecodeVersion == 15 || dataWin->gen8.bytecodeVersion == 16) bytecodeVersionSupported = true;
 #endif
