@@ -6354,8 +6354,7 @@ static RValue builtin_buffer_md5(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYB
     char* hex = safeMalloc(33);
     static const char HEX[] = "0123456789abcdef";
     for (int32_t i = 0; 16 > i; i++) {
-        hex[i * 2]     = HEX[(digest[i] >> 4) & 0xF];
-        hex[i * 2 + 1] = HEX[digest[i] & 0xF];
+        sprintf(&hex[i * 2], "%02x", digest[i]);
     }
     hex[32] = '\0';
     return RValue_makeOwnedString(hex);
@@ -6380,10 +6379,8 @@ static RValue builtin_buffer_sha1(MAYBE_UNUSED VMContext* ctx, RValue* args, MAY
     SHA1Final(digest, &sctx);
 
     char* hex = safeMalloc(41);
-    static const char HEX[] = "0123456789abcdef";
     for (int32_t i = 0; 20 > i; i++) {
-        hex[i * 2]     = HEX[(digest[i] >> 4) & 0xF];
-        hex[i * 2 + 1] = HEX[digest[i] & 0xF];
+        sprintf(&hex[i * 2], "%02x", digest[i]);
     }
     hex[40] = '\0';
     return RValue_makeOwnedString(hex);
