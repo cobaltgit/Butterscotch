@@ -132,7 +132,7 @@ target_include_directories(butterscotch PUBLIC vendor/stb/ds)
 target_sources(butterscotch PRIVATE vendor/md5/md5.c)
 target_include_directories(butterscotch PUBLIC vendor/md5)
 
-# Brad Reid's SHA1 implementation
+# Steve Reid's SHA1 implementation
 target_sources(butterscotch PRIVATE vendor/sha1/sha1.c)
 target_include_directories(butterscotch PUBLIC vendor/sha1)
 
