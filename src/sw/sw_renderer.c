@@ -538,6 +538,38 @@ static void swrTransformSizeIfNeeded(SWRenderer* swr, float* dx, float* dy)
 	if (dy) *dy *= ((float)swr->portH / swr->viewH);
 }
 
+static void swrTransformPosIntIfNeeded(SWRenderer* swr, int32_t* dx, int32_t* dy)
+{
+	if (!swr->viewActive) return;
+	
+	if (dx) {
+		*dx -= swr->viewX;
+		*dx = *dx * swr->portW / swr->viewW;
+		*dx += swr->portX;
+	}
+	if (dy) {
+		*dy -= swr->viewY;
+		*dy = *dy * swr->portH / swr->viewH;
+		*dy += swr->portY;
+	}
+}
+
+static void swrTransformSizeIntIfNeeded(SWRenderer* swr, int32_t* dx, int32_t* dy)
+{
+	if (!swr->viewActive || !swr->viewW || !swr->viewH) return;
+	
+	if (dx) *dx = *dx * swr->portW / swr->viewW;
+	if (dy) *dy = *dy * swr->portH / swr->viewH;
+}
+
+static void swrReverseTransformSizeIntIfNeeded(SWRenderer* swr, int32_t* dx, int32_t* dy)
+{
+	if (!swr->viewActive) return;
+	
+	if (dx) *dx = *dx * swr->viewW / swr->portW;
+	if (dy) *dy = *dy * swr->viewH / swr->portH;
+}
+
 FORCE_INLINE void swrPlotPixel(Renderer* renderer, int x, int y, uintpixel_t color, int alpha)
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
@@ -1014,8 +1046,8 @@ static void SWRenderer_drawSprite(Renderer* renderer, int32_t tpagIndex, float x
 	
 	float dx = (float)(tpag->targetX - originX);
 	float dy = (float)(tpag->targetY - originY);
-	int dw = (int)(xscale * sw);
-	int dh = (int)(yscale * sh);
+	int dw = (int)(xscale * tpag->targetWidth);
+	int dh = (int)(yscale * tpag->targetHeight);
 	dx *= xscale;
 	dy *= yscale;
 	dx += x;
@@ -1608,6 +1640,10 @@ static int32_t SWRenderer_createSpriteFromSurface(Renderer* renderer, int32_t su
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
 	
+	swrTransformPosIntIfNeeded(swr, &x, &y);
+	swrTransformSizeIntIfNeeded(swr, &w, &h);
+	swrTransformSizeIntIfNeeded(swr, &xorig, &yorig);
+	
 	(void) removeback;
 	(void) smooth;
 	
@@ -1655,6 +1691,10 @@ static int32_t SWRenderer_createSpriteFromSurface(Renderer* renderer, int32_t su
 	
 	int32_t spriteW = w;
 	int32_t spriteH = h;
+	
+	int32_t targetW = spriteW;
+	int32_t targetH = spriteH;
+	swrReverseTransformSizeIntIfNeeded(swr, &targetW, &targetH);
 
 	swr->textures[texturePageId] = tex;
 
@@ -1667,8 +1707,8 @@ static int32_t SWRenderer_createSpriteFromSurface(Renderer* renderer, int32_t su
 	tpag->sourceHeight = (uint16_t) spriteH;
 	tpag->targetX = 0;
 	tpag->targetY = 0;
-	tpag->targetWidth = (uint16_t) spriteW;
-	tpag->targetHeight = (uint16_t) spriteH;
+	tpag->targetWidth = (uint16_t) (spriteW * swr->viewW / swr->portW);
+	tpag->targetHeight = (uint16_t) (spriteH * swr->viewH / swr->portH);
 	tpag->boundingWidth = (uint16_t) spriteW;
 	tpag->boundingHeight = (uint16_t) spriteH;
 	tpag->texturePageId = texturePageId;
