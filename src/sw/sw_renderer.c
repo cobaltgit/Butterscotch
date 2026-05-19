@@ -204,6 +204,12 @@ FORCE_INLINE bool swrMustRotateTolerant(float angleDeg)
 	return swrAbs(angleDegInt) >= 1; // 1/16 of a degree
 }
 
+FORCE_INLINE int swrSgn(float x)
+{
+	if (x < 0) return -1;
+	return 1;
+}
+
 FORCE_INLINE int swrFloor(float x)
 {
 	int i = (int) x;
@@ -1019,8 +1025,8 @@ static void SWRenderer_drawSprite(Renderer* renderer, int32_t tpagIndex, float x
 	
 	if (UNLIKELY(swrMustRotate(angleDeg)))
 	{
-		float pivotX = x - dx;
-		float pivotY = y - dy;
+		float pivotX = (x - dx) * swrSgn(xscale);
+		float pivotY = (y - dy) * swrSgn(yscale);
 		swrDrawSpriteRotated(renderer, dx, dy, dw, dh, texture, sx, sy, sw, sh, color, alpha, angleDeg, pivotX, pivotY);
 	}
 	else
