@@ -300,7 +300,7 @@ static inline PreprocessedText TextUtils_wrapText(Font* font, const char* text, 
             // Loop through string and get the number of chars that will fit in the line.
             while (len > end && (float) linewidth > total) {
                 if (pNew[end] == '\n') break; // if we hit a newline, then "break" here...
-                int tentative = end;
+                int32_t tentative = end;
                 uint16_t cp = TextUtils_decodeUtf8(pNew, len, &tentative); // advance `end` by one codepoint
                 FontGlyph* glyph = TextUtils_findGlyph(font, cp);
                 float size = (glyph != nullptr) ? (float) glyph->shift : 0.0f; // width of character
