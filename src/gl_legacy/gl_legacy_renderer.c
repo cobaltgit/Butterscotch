@@ -1344,20 +1344,20 @@ static void glGpuSetBlendModeExt(MAYBE_UNUSED Renderer* renderer, int32_t sfacto
     glBlendFunc(GLCommon_blendFactorToGL(sfactor), GLCommon_blendFactorToGL(dfactor));
 }
 
-static void glGpuSetBlendEnable(Renderer* renderer, bool enable) {
+static void glGpuSetBlendEnable(MAYBE_UNUSED Renderer* renderer, bool enable) {
     enable ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
 }
 
-static bool glGpuGetBlendEnable(Renderer* renderer) {
+static bool glGpuGetBlendEnable(MAYBE_UNUSED Renderer* renderer) {
     
     return glIsEnabled(GL_BLEND);
 }
 
-static void glGpuSetAlphaTestEnable(Renderer* renderer, bool enable) {
+static void glGpuSetAlphaTestEnable(MAYBE_UNUSED Renderer* renderer, bool enable) {
     enable ? glEnable(GL_ALPHA_TEST) : glDisable(GL_ALPHA_TEST);
 }
 
-static void glGpuSetAlphaTestRef(Renderer* renderer, uint8_t ref) {
+static void glGpuSetAlphaTestRef(MAYBE_UNUSED Renderer* renderer, uint8_t ref) {
     glAlphaFunc(GL_GREATER, ref/255.0f);
 }
 

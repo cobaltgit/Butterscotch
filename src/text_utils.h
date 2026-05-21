@@ -245,7 +245,7 @@ static inline int32_t TextUtils_skipNewline(const char* text, int32_t lineEnd, i
     return next;
 }
 
-static char* TextUtils_trimTrailingWhitespace(char* str) {
+static inline char* TextUtils_trimTrailingWhitespace(char* str) {
     size_t len = strlen(str);
     while (len > 0 && (TextUtils_isWhitespaceChar(str[len - 1]) || TextUtils_isNewlineChar(str[len - 1]))) {
         len--;

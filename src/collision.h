@@ -12,7 +12,7 @@
 // target == INSTANCE_ALL (-3): match any instance
 // target >= 0 && < 100000: object index (match via parent chain)
 static inline bool Collision_matchesTarget(DataWin* dataWin, Instance* inst, int32_t target) {
-    if (target >= 100000) return inst->instanceId == target;
+    if (target >= 100000) return inst->instanceId == (uint32_t) target;
     if (target == INSTANCE_ALL) return true;
     return VM_isObjectOrDescendant(dataWin, inst->objectIndex, target);
 }
