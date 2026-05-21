@@ -6385,6 +6385,31 @@ static RValue builtin_buffer_save(MAYBE_UNUSED VMContext* ctx, RValue* args, MAY
     return RValue_makeUndefined();
 }
 
+static RValue builtin_buffer_save_ext(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    FileSystem* fs = runner->fileSystem;
+    int32_t id = RValue_toInt32(args[0]);
+    char* filename = RValue_toString(args[1]);
+    int32_t offset = RValue_toInt32(args[2]);
+    size_t size = RValue_toInt32(args[3]);
+    GmlBuffer* buf = gmlBufferGet(runner, id);
+
+    if (buf != nullptr && size > 0 && offset >= 0) {
+        int32_t maxBoundary = (buf->type == GML_BUFFER_GROW) ? buf->usedSize : buf->size;
+
+        if (offset < maxBoundary) {
+            if (offset + size > maxBoundary) {
+                size = maxBoundary - offset;
+            }
+
+            fs->vtable->writeFileBinary(fs, filename, buf->data + offset, size);
+        }
+    }
+
+    free(filename);
+    return RValue_makeUndefined();
+}
+
 STUB_RETURN_ZERO(buffer_base64_encode)
 
 static RValue builtin_base64_encode(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
@@ -11291,6 +11316,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "buffer_get_size", builtin_buffer_get_size);
     VM_registerBuiltin(ctx, "buffer_load", builtin_buffer_load);
     VM_registerBuiltin(ctx, "buffer_save", builtin_buffer_save);
+    VM_registerBuiltin(ctx, "buffer_save_ext", builtin_buffer_save_ext);
     VM_registerBuiltin(ctx, "buffer_base64_encode", builtin_buffer_base64_encode);
     VM_registerBuiltin(ctx, "base64_encode", builtin_base64_encode);
     VM_registerBuiltin(ctx, "base64_decode", builtin_base64_decode);
