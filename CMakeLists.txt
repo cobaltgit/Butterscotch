@@ -339,6 +339,9 @@ elseif(PLATFORM STREQUAL "web")
     # stb_vorbis (for miniaudio's OGG decoding)
     target_include_directories(butterscotch PUBLIC vendor/stb/vorbis)
 
+    # bzip2
+    target_link_libraries(butterscotch PRIVATE bzip2)
+
     set_target_properties(butterscotch PROPERTIES SUFFIX ".mjs")
 
     target_link_options(
