@@ -364,7 +364,7 @@ elseif(PLATFORM STREQUAL "web")
             "-pthread"
     )
 
-    target_compile_options(butterscotch PRIVATE "--use-port=bzip2" "-pthread")
+    target_compile_options(butterscotch PRIVATE "-pthread")
 elseif(PLATFORM STREQUAL "web-meta")
     set_target_properties(butterscotch PROPERTIES
         SUFFIX ".mjs"
