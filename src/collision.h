@@ -79,11 +79,13 @@ static inline InstanceBBox Collision_computeBBox(DataWin* dataWin, Instance* ins
             .valid  = true
         };
     } else {
+        // No rotation fast path
         GMLReal left   = inst->x + inst->imageXscale * (marginL - originX);
         GMLReal right  = inst->x + inst->imageXscale * (marginR - originX);
         GMLReal top    = inst->y + inst->imageYscale * (marginT - originY);
         GMLReal bottom = inst->y + inst->imageYscale * (marginB - originY);
 
+        // Normalize if negative scale
         if (left > right)   { GMLReal tmp = left;   left   = right;  right  = tmp; }
         if (top  > bottom)  { GMLReal tmp = top;    top    = bottom; bottom = tmp; }
 
