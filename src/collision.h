@@ -27,7 +27,7 @@ static inline Sprite* Collision_getSprite(DataWin* dataWin, Instance* inst) {
 // Computes the axis-aligned bounding box for an instance using its collision sprite
 static inline InstanceBBox Collision_computeBBox(DataWin* dataWin, Instance* inst) {
     // Fast path: return cached AABB when nothing bbox-affecting has changed.
-    if (__builtin_expect(inst->bboxCacheValid, 1)) return inst->cachedBBox;
+    if (inst->bboxCacheValid) return inst->cachedBBox;
 
     Sprite* spr = Collision_getSprite(dataWin, inst);
     if (spr == nullptr) {
