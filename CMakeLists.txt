@@ -140,6 +140,18 @@ target_include_directories(butterscotch PUBLIC vendor/sha1)
 target_sources(butterscotch PRIVATE vendor/base64/base64.c)
 target_include_directories(butterscotch PUBLIC vendor/base64)
 
+# bzip2
+add_library(bzip2 STATIC
+    vendor/bzip2/blocksort.c
+    vendor/bzip2/bzlib.c
+    vendor/bzip2/compress.c
+    vendor/bzip2/crctable.c
+    vendor/bzip2/decompress.c
+    vendor/bzip2/huffman.c
+    vendor/bzip2/randtable.c
+)
+
+target_include_directories(bzip2 PUBLIC vendor/bzip2)
 if(PLATFORM STREQUAL "glfw")
     if (NOT ENABLE_LEGACY_GL AND NOT ENABLE_MODERN_GL)
         message(FATAL_ERROR "GLFW requires at least one GL version!")
@@ -210,20 +222,20 @@ if(PLATFORM STREQUAL "glfw")
         # Target Windows 7+ (avoids referencing newer APIs like MapViewOfFileNuma2 that MinGW import libs don't provide)
         # https://github.com/mirror/mingw-w64/blob/master/mingw-w64-headers/include/sdkddkver.h
         target_compile_definitions(butterscotch PRIVATE _WIN32_WINNT=0x0601 NTDDI_VERSION=0x06010000 WIN32_LEAN_AND_MEAN)
-        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} ${AUDIO_LIBRARIES} glad m opengl32 gdi32 winmm bz2)
+        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} ${AUDIO_LIBRARIES} glad m opengl32 gdi32 winmm bzip2)
         target_link_options(butterscotch PRIVATE -static)
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Haiku")
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(GLFW3 REQUIRED glfw3)
         target_include_directories(butterscotch PRIVATE ${GLFW3_INCLUDE_DIRS})
         target_link_directories(butterscotch PRIVATE ${GLFW3_LIBRARY_DIRS})
-        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} ${AUDIO_LIBRARIES} glad m pthread bz2)
+        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} ${AUDIO_LIBRARIES} glad m pthread bzip2)
     else()
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(GLFW3 REQUIRED glfw3)
         target_include_directories(butterscotch PRIVATE ${GLFW3_INCLUDE_DIRS})
         target_link_directories(butterscotch PRIVATE ${GLFW3_LIBRARY_DIRS})
-        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} ${AUDIO_LIBRARIES} glad m pthread dl bz2)
+        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} ${AUDIO_LIBRARIES} glad m pthread dl bzip2)
     endif()
 
     # Enable AddressSanitizer by default in Debug builds
@@ -297,7 +309,7 @@ elseif(PLATFORM STREQUAL "sdl")
 
     find_package(SDL REQUIRED)
     target_include_directories(butterscotch PUBLIC "${SDL_INCLUDE_DIR}")
-    target_link_libraries(butterscotch ${AUDIO_LIBRARIES} ${SDL_LIBRARY} glad m pthread bz2)
+    target_link_libraries(butterscotch ${AUDIO_LIBRARIES} ${SDL_LIBRARY} glad m pthread bzip2)
 
     # Enable AddressSanitizer by default in Debug builds
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -346,7 +358,6 @@ elseif(PLATFORM STREQUAL "web")
             "-sALLOW_MEMORY_GROWTH"
             "-sSHARED_MEMORY=1"
             "-sPTHREAD_POOL_SIZE=4"
-            "--use-port=bzip2"
             "-pthread"
     )
 
@@ -611,7 +622,7 @@ elseif(PLATFORM STREQUAL "ps3")
 
     find_package(SDL2 REQUIRED)
     target_include_directories(butterscotch PRIVATE ${SDL2_INCLUDE_DIRS})
-    target_link_libraries(butterscotch PRIVATE ${SDL2_LIBRARIES} m gcm_sys rsx sysutil io audio rt lv2 io audio bz2)
+    target_link_libraries(butterscotch PRIVATE ${SDL2_LIBRARIES} m gcm_sys rsx sysutil io audio rt lv2 io audio bzip2)
 else()
     message(FATAL_ERROR "Unknown platform! ${PLATFORM}")
 endif()
