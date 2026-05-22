@@ -17,11 +17,6 @@ static inline bool Collision_matchesTarget(DataWin* dataWin, Instance* inst, int
     return VM_isObjectOrDescendant(dataWin, inst->objectIndex, target);
 }
 
-typedef struct {
-    GMLReal left, right, top, bottom;
-    bool valid;
-} InstanceBBox;
-
 // Returns the collision sprite for an instance (mask sprite if set, else display sprite)
 static inline Sprite* Collision_getSprite(DataWin* dataWin, Instance* inst) {
     int32_t sprIdx = (inst->maskIndex >= 0) ? inst->maskIndex : inst->spriteIndex;
@@ -31,8 +26,15 @@ static inline Sprite* Collision_getSprite(DataWin* dataWin, Instance* inst) {
 
 // Computes the axis-aligned bounding box for an instance using its collision sprite
 static inline InstanceBBox Collision_computeBBox(DataWin* dataWin, Instance* inst) {
+    // Fast path: return cached AABB when nothing bbox-affecting has changed.
+    if (__builtin_expect(inst->bboxCacheValid, 1)) return inst->cachedBBox;
+
     Sprite* spr = Collision_getSprite(dataWin, inst);
-    if (spr == nullptr) return (InstanceBBox){0, 0, 0, 0, false};
+    if (spr == nullptr) {
+        inst->cachedBBox      = (InstanceBBox){0, 0, 0, 0, false};
+        inst->bboxCacheValid  = true;
+        return inst->cachedBBox;
+    }
 
     GMLReal marginL = (GMLReal) spr->marginLeft;
     GMLReal marginR = (GMLReal) (spr->marginRight + 1);
@@ -41,6 +43,7 @@ static inline InstanceBBox Collision_computeBBox(DataWin* dataWin, Instance* ins
     GMLReal originX = (GMLReal) spr->originX;
     GMLReal originY = (GMLReal) spr->originY;
 
+    InstanceBBox result;
     if (GMLReal_fabs(inst->imageAngle) > 0.0001) {
         // Compute rotated AABB: transform the 4 corners of the unrotated bbox
         GMLReal rad = inst->imageAngle * M_PI / 180.0;
@@ -68,26 +71,28 @@ static inline InstanceBBox Collision_computeBBox(DataWin* dataWin, Instance* ins
             if (cy[c] > maxY) maxY = cy[c];
         }
 
-        return (InstanceBBox){
+        result = (InstanceBBox){
             .left   = inst->x + minX,
             .right  = inst->x + maxX,
             .top    = inst->y + minY,
             .bottom = inst->y + maxY,
             .valid  = true
         };
+    } else {
+        GMLReal left   = inst->x + inst->imageXscale * (marginL - originX);
+        GMLReal right  = inst->x + inst->imageXscale * (marginR - originX);
+        GMLReal top    = inst->y + inst->imageYscale * (marginT - originY);
+        GMLReal bottom = inst->y + inst->imageYscale * (marginB - originY);
+
+        if (left > right)   { GMLReal tmp = left;   left   = right;  right  = tmp; }
+        if (top  > bottom)  { GMLReal tmp = top;    top    = bottom; bottom = tmp; }
+
+        result = (InstanceBBox){left, right, top, bottom, true};
     }
 
-    // No rotation fast path
-    GMLReal left   = inst->x + inst->imageXscale * (marginL - originX);
-    GMLReal right  = inst->x + inst->imageXscale * (marginR - originX);
-    GMLReal top    = inst->y + inst->imageYscale * (marginT - originY);
-    GMLReal bottom = inst->y + inst->imageYscale * (marginB - originY);
-
-    // Normalize if negative scale
-    if (left > right) { GMLReal tmp = left; left = right; right = tmp; }
-    if (top > bottom) { GMLReal tmp = top; top = bottom; bottom = tmp; }
-
-    return (InstanceBBox){left, right, top, bottom, true};
+    inst->cachedBBox     = result;
+    inst->bboxCacheValid = true;
+    return result;
 }
 
 static inline bool Collision_hasFrameMasks(Sprite* sprite) {

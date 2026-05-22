@@ -103,6 +103,8 @@ void SpatialGrid_markInstanceAsDirty(SpatialGrid* grid, Instance* dirtyInstance)
         return;
     }
 
+    dirtyInstance->bboxCacheValid   = false;   // <-- ADD THIS
+
     if (dirtyInstance->spatialGridDirty)
         return;
 

@@ -47,6 +47,7 @@ Instance* Instance_create(uint32_t instanceId, int32_t objectIndex, GMLReal x, G
     inst->gravityDirection = 270.0f;
     inst->pathIndex = -1;
     inst->pathScale = 1.0f;
+    inst->bboxCacheValid = false;
 
     // Initialize alarms to -1 (inactive)
     repeat(GML_ALARM_COUNT, i) {
