@@ -1178,6 +1178,8 @@ static void SWRenderer_drawTriangle(Renderer* renderer, float x1, float y1, floa
 	(void)outline;
 	
 	uintpixel_t drawColorCvt = swrConvertPixel(renderer->drawColor);
+	
+	// TODO: draw triangle properly.
 	swrDrawLine(renderer, x1, y1, x2, y2, 1, drawColorCvt, renderer->drawAlpha);
 	swrDrawLine(renderer, x1, y1, x3, y3, 1, drawColorCvt, renderer->drawAlpha);
 	swrDrawLine(renderer, x2, y2, x3, y3, 1, drawColorCvt, renderer->drawAlpha);
@@ -1186,9 +1188,9 @@ static void SWRenderer_drawTriangle(Renderer* renderer, float x1, float y1, floa
 static void SWRenderer_drawLineColor(Renderer* renderer, float x1, float y1, float x2, float y2,
 									 float width, uint32_t color1, uint32_t color2, float alpha)
 {
-	(void)renderer; (void)x1; (void)y1; (void)x2; (void)y2;
-	(void)width; (void)color1; (void)color2; (void)alpha;
-	UNIMP();
+	// TODO: implement gradient properly
+	uintpixel_t actualColor = tint(swrConvertPixel(color1), swrConvertPixel(color2));
+	swrDrawLine(renderer, x1, y1, x2, y2, width, actualColor, alpha);
 }
 
 typedef struct
