@@ -158,6 +158,7 @@ void InputRecording_processFrame(InputRecording* recording, RunnerKeyboardState*
     if (recording->isRecording) {
         int32_t* heldKeys = nullptr;
         repeat(GML_KEY_COUNT, key) {
+            if (recording->filterDebugKeys && (key == 'P' || key == 'O')) continue;
             if (kb->keyDown[key]) {
                 arrput(heldKeys, (int32_t) key);
             }
