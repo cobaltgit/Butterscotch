@@ -894,7 +894,7 @@ static bool glResolveGlyph(GLLegacyRenderer* gl, DataWin* dw, GlFontState* state
     return true;
 }
 
-static void glDrawText(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg) {
+static void glDrawText(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg, float lineSeparation) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     DataWin* dw = renderer->dataWin;
 
@@ -919,7 +919,8 @@ static void glDrawText(Renderer* renderer, const char* text, float x, float y, f
 
     // Per-line vertical stride. HTML5 runner's default `linesep` is `max_glyph_height * scaleY`.
     // We apply scaleY via the transform matrix below, so keep the stride in pre-scale (local) coords.
-    float lineStride = TextUtils_lineStride(font);
+    // Caller-supplied separation is in world pre-scale pixels; divide by font->scaleY so the transform restores it.
+    float lineStride = (0.0f > lineSeparation) ? TextUtils_lineStride(font) : (lineSeparation / (font->scaleY != 0.0f ? font->scaleY : 1.0f));
 
     // Vertical alignment offset
     float totalHeight = (float) lineCount * lineStride;
@@ -1034,7 +1035,7 @@ static void glDrawText(Renderer* renderer, const char* text, float x, float y, f
     }
 }
 
-static void glDrawTextColor(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg, int32_t _c1, int32_t _c2, int32_t _c3, int32_t _c4, float alpha) {
+static void glDrawTextColor(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg, int32_t _c1, int32_t _c2, int32_t _c3, int32_t _c4, float alpha, float lineSeparation) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     DataWin* dw = renderer->dataWin;
 
@@ -1052,7 +1053,7 @@ static void glDrawTextColor(Renderer* renderer, const char* text, float x, float
     // Count lines, treating \r\n and \n\r as single breaks
     int32_t lineCount = TextUtils_countLines(text, textLen);
 
-    float lineStride = TextUtils_lineStride(font);
+    float lineStride = (0.0f > lineSeparation) ? TextUtils_lineStride(font) : (lineSeparation / (font->scaleY != 0.0f ? font->scaleY : 1.0f));
 
     // Vertical alignment offset
     float totalHeight = (float) lineCount * lineStride;
@@ -1344,20 +1345,20 @@ static void glGpuSetBlendModeExt(MAYBE_UNUSED Renderer* renderer, int32_t sfacto
     glBlendFunc(GLCommon_blendFactorToGL(sfactor), GLCommon_blendFactorToGL(dfactor));
 }
 
-static void glGpuSetBlendEnable(Renderer* renderer, bool enable) {
+static void glGpuSetBlendEnable(MAYBE_UNUSED Renderer* renderer, bool enable) {
     enable ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
 }
 
-static bool glGpuGetBlendEnable(Renderer* renderer) {
+static bool glGpuGetBlendEnable(MAYBE_UNUSED Renderer* renderer) {
     
     return glIsEnabled(GL_BLEND);
 }
 
-static void glGpuSetAlphaTestEnable(Renderer* renderer, bool enable) {
+static void glGpuSetAlphaTestEnable(MAYBE_UNUSED Renderer* renderer, bool enable) {
     enable ? glEnable(GL_ALPHA_TEST) : glDisable(GL_ALPHA_TEST);
 }
 
-static void glGpuSetAlphaTestRef(Renderer* renderer, uint8_t ref) {
+static void glGpuSetAlphaTestRef(MAYBE_UNUSED Renderer* renderer, uint8_t ref) {
     glAlphaFunc(GL_GREATER, ref/255.0f);
 }
 

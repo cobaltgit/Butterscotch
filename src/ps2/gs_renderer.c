@@ -1853,7 +1853,7 @@ static bool gsResolveGlyph(GsRenderer* gs, DataWin* dw, GsFontState* state, Font
     return true;
 }
 
-static void gsDrawText(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, MAYBE_UNUSED float angleDeg) {
+static void gsDrawText(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, MAYBE_UNUSED float angleDeg, float lineSeparation) {
     GsRenderer* gs = (GsRenderer*) renderer;
     DataWin* dw = renderer->dataWin;
 
@@ -1882,7 +1882,8 @@ static void gsDrawText(Renderer* renderer, const char* text, float x, float y, f
 
     // Vertical alignment
     int32_t lineCount = TextUtils_countLines(text, textLen);
-    float lineStride = TextUtils_lineStride(font);
+    // Caller-supplied separation is in world pre-scale pixels; divide by font->scaleY so the transform restores it.
+    float lineStride = (0.0f > lineSeparation) ? TextUtils_lineStride(font) : (lineSeparation / (font->scaleY != 0.0f ? font->scaleY : 1.0f));
     float valignOffset = 0;
     if (renderer->drawValign != 0) {
         float totalHeight = (float) lineCount * lineStride;
@@ -1968,7 +1969,7 @@ static void gsDrawText(Renderer* renderer, const char* text, float x, float y, f
     }
 }
 
-static void gsDrawTextColor(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, MAYBE_UNUSED float angleDeg, int32_t _c1, int32_t _c2, int32_t _c3, int32_t _c4, float alpha) {
+static void gsDrawTextColor(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, MAYBE_UNUSED float angleDeg, int32_t _c1, int32_t _c2, int32_t _c3, int32_t _c4, float alpha, float lineSeparation) {
     GsRenderer* gs = (GsRenderer*) renderer;
     DataWin* dw = renderer->dataWin;
 
@@ -1989,7 +1990,7 @@ static void gsDrawTextColor(Renderer* renderer, const char* text, float x, float
 
     // Vertical alignment
     int32_t lineCount = TextUtils_countLines(text, textLen);
-    float lineStride = TextUtils_lineStride(font);
+    float lineStride = (0.0f > lineSeparation) ? TextUtils_lineStride(font) : (lineSeparation / (font->scaleY != 0.0f ? font->scaleY : 1.0f));
     float totalHeight = (float) lineCount * lineStride;
     float valignOffset = 0;
     if (renderer->drawValign == 1) valignOffset = -totalHeight / 2.0f;

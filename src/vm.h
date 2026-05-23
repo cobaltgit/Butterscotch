@@ -299,11 +299,11 @@ void VM_structSet(VMContext* ctx, Instance* structInst, const char* name, RValue
 // Look up the varID for a self-scoped variable name, allocating a fresh synthetic ID if absent.
 int32_t VM_getOrAllocateSelfVarID(VMContext* ctx, const char* name);
 
-static const char* VM_getCallerName(VMContext* ctx) {
+static inline const char* VM_getCallerName(VMContext* ctx) {
     return ctx->currentCodeName != nullptr ? ctx->currentCodeName : "<unknown>";
 }
 
-static char* VM_createDedupKey(const char* callerName, const char* funcName) {
+static inline char* VM_createDedupKey(const char* callerName, const char* funcName) {
     // Build dedup key: "callerName\tfuncName"
     size_t keyLen = strlen(callerName) + 1 + strlen(funcName) + 1;
     char* dedupKey = safeMalloc(keyLen);
@@ -328,7 +328,7 @@ static char* VM_createDedupKey(const char* callerName, const char* funcName) {
  * @param varName The variable name being accessed (e.g. "x").
  * @return true if the access matches a trace filter and should be logged.
  */
-static bool VM_shouldTraceVariable(StringBooleanEntry* traceMap, const char* scopeName, const char* altScopeName, const char* varName) {
+static inline bool VM_shouldTraceVariable(StringBooleanEntry* traceMap, const char* scopeName, const char* altScopeName, const char* varName) {
     if (shlen(traceMap) == 0) return false;
     if (shgeti(traceMap, "*") != -1) return true;
     if (shgeti(traceMap, scopeName) != -1) return true;
@@ -344,7 +344,7 @@ static bool VM_shouldTraceVariable(StringBooleanEntry* traceMap, const char* sco
     return false;
 }
 
-static void VM_checkIfVariableShouldBeTracedAndLog(VMContext* ctx, const char* scopeName, const char* altScopeName, const char* name, RValue value, bool isWrite, int32_t arrayIndex, int32_t instanceId, const char* additional) {
+static inline void VM_checkIfVariableShouldBeTracedAndLog(VMContext* ctx, const char* scopeName, const char* altScopeName, const char* name, RValue value, bool isWrite, int32_t arrayIndex, int32_t instanceId, const char* additional) {
     StringBooleanEntry* varModificationsToBeTraced = isWrite ? ctx->varWritesToBeTraced : ctx->varReadsToBeTraced;
     if (!VM_shouldTraceVariable(varModificationsToBeTraced, scopeName, altScopeName, name))
         return;
@@ -354,7 +354,7 @@ static void VM_checkIfVariableShouldBeTracedAndLog(VMContext* ctx, const char* s
     const char* arrow = isWrite ? "=" : "->";
     char indexBuf[16] = "";
     if (arrayIndex >= 0) snprintf(indexBuf, sizeof(indexBuf), "[%d]", arrayIndex);
-    char instanceIdBuf[24] = "";
+    char instanceIdBuf[28] = "";
     if (instanceId >= 0) snprintf(instanceIdBuf, sizeof(instanceIdBuf), " (instanceId=%d)", instanceId);
     fprintf(stderr, "VM: [%s] %s %s.%s%s %s %s%s%s\n", ctx->currentCodeName, verb, scopeName, name, indexBuf, arrow, rvalueAsString, instanceIdBuf, additional);
     free(rvalueAsString);

@@ -66,8 +66,8 @@ typedef struct {
     void (*drawLine)(Renderer* renderer, float x1, float y1, float x2, float y2, float width, uint32_t color, float alpha);
     void (*drawTriangle)(Renderer *renderer, float x1, float y1, float x2, float y2, float x3, float y3, bool outline);
     void (*drawLineColor)(Renderer* renderer, float x1, float y1, float x2, float y2, float width, uint32_t color1, uint32_t color2, float alpha);
-    void (*drawText)(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg);
-    void (*drawTextColor)(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg, int32_t c1, int32_t c2, int32_t c3, int32_t c4, float alpha);
+    void (*drawText)(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg, float lineSeparation);
+    void (*drawTextColor)(Renderer* renderer, const char* text, float x, float y, float xscale, float yscale, float angleDeg, int32_t c1, int32_t c2, int32_t c3, int32_t c4, float alpha, float lineSeparation);
     void (*flush)(Renderer* renderer);
     void (*clearScreen)(Renderer* renderer, uint32_t color, float alpha);
     int32_t (*createSpriteFromSurface)(Renderer* renderer, int32_t surfaceID, int32_t x, int32_t y, int32_t w, int32_t h, bool removeback, bool smooth, int32_t xorig, int32_t yorig);
@@ -131,7 +131,7 @@ struct Renderer {
 // ===[ Shared Helpers (platform-agnostic) ]===
 
 // Resolves a sprite + subimage to a TPAG index, with frame wrapping
-static int32_t Renderer_resolveTPAGIndex(DataWin* dataWin, int32_t spriteIndex, int32_t subimg) {
+static inline int32_t Renderer_resolveTPAGIndex(DataWin* dataWin, int32_t spriteIndex, int32_t subimg) {
     if (0 > spriteIndex || dataWin->sprt.count <= (uint32_t) spriteIndex) return -1;
 
     Sprite* sprite = &dataWin->sprt.sprites[spriteIndex];
@@ -145,10 +145,10 @@ static int32_t Renderer_resolveTPAGIndex(DataWin* dataWin, int32_t spriteIndex, 
 }
 
 // Forward declaration: defined further down once drawSpritePartExt is available.
-static void Renderer_drawSpriteNineSlice(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float w, float h, bool flipX, bool flipY, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha);
+static inline void Renderer_drawSpriteNineSlice(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float w, float h, bool flipX, bool flipY, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha);
 
 // Stretched: draw_sprite_stretched(sprite, subimg, x, y, w, h)
-static void Renderer_drawSpriteStretched(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float w, float h, uint32_t color, float alpha) {
+static inline void Renderer_drawSpriteStretched(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float w, float h, uint32_t color, float alpha) {
     DataWin* dw = renderer->dataWin;
     if (spriteIndex >= 0 && (uint32_t) spriteIndex < dw->sprt.count && dw->sprt.sprites[spriteIndex].nineSliceEnabled) {
         Renderer_drawSpriteNineSlice(renderer, spriteIndex, subimg, x, y, w, h, false, false, 0.0f, x, y, color, alpha);
@@ -165,7 +165,7 @@ static void Renderer_drawSpriteStretched(Renderer* renderer, int32_t spriteIndex
 }
 
 // Full version: draw_sprite_ext(sprite, subimg, x, y, xscale, yscale, rot, color, alpha)
-static void Renderer_drawSpriteExt(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float xscale, float yscale, float rot, uint32_t color, float alpha) {
+static inline void Renderer_drawSpriteExt(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float xscale, float yscale, float rot, uint32_t color, float alpha) {
     DataWin* dw = renderer->dataWin;
     int32_t tpagIndex = Renderer_resolveTPAGIndex(dw, spriteIndex, subimg);
     if (0 > tpagIndex) return;
@@ -190,11 +190,11 @@ static void Renderer_drawSpriteExt(Renderer* renderer, int32_t spriteIndex, int3
 }
 
 // Convenience: draw_sprite(sprite, subimg, x, y)
-static void Renderer_drawSprite(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y) {
+static inline void Renderer_drawSprite(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y) {
     Renderer_drawSpriteExt(renderer, spriteIndex, subimg, x, y, 1.0f, 1.0f, 0.0f, 0xFFFFFF, renderer->drawAlpha);
 }
 
-static void Renderer_drawSpritePos(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float alpha) {
+static inline void Renderer_drawSpritePos(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float alpha) {
     DataWin* dw = renderer->dataWin;
     int32_t tpagIndex = Renderer_resolveTPAGIndex(dw, spriteIndex, subimg);
     if (0 > tpagIndex) return;
@@ -202,26 +202,26 @@ static void Renderer_drawSpritePos(Renderer* renderer, int32_t spriteIndex, int3
     renderer->vtable->drawSpritePos(renderer, tpagIndex, x1, y1, x2, y2, x3, y3, x4, y4, alpha);
 }
 
-static int32_t Renderer_createSurface(Renderer* renderer, int32_t width, int32_t height) {
+static inline int32_t Renderer_createSurface(Renderer* renderer, int32_t width, int32_t height) {
     //if (0 > width)  (0 > height) return;
     return renderer->vtable->createSurface(renderer, width, height);
 }
 
-static bool Renderer_surfaceExists(Renderer* renderer, int32_t surfaceIndex) {
+static inline bool Renderer_surfaceExists(Renderer* renderer, int32_t surfaceIndex) {
     return renderer->vtable->surfaceExists(renderer, surfaceIndex);
 }
 
-static float Renderer_getSurfaceWidth(Renderer* renderer, int32_t surfaceIndex) {
+static inline float Renderer_getSurfaceWidth(Renderer* renderer, int32_t surfaceIndex) {
     return renderer->vtable->getSurfaceWidth(renderer, surfaceIndex);
 }
 
-static float Renderer_getSurfaceHeight(Renderer* renderer, int32_t surfaceIndex) {
+static inline float Renderer_getSurfaceHeight(Renderer* renderer, int32_t surfaceIndex) {
     return renderer->vtable->getSurfaceHeight(renderer, surfaceIndex);
 }
 
 
 // Draws part of a sprite with extended parameters (scale, rotation, color, alpha)
-static void Renderer_drawSpritePartExt(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t left, int32_t top, int32_t width, int32_t height, float x, float y, float xscale, float yscale, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
+static inline void Renderer_drawSpritePartExt(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t left, int32_t top, int32_t width, int32_t height, float x, float y, float xscale, float yscale, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
     DataWin* dw = renderer->dataWin;
     int32_t tpagIndex = Renderer_resolveTPAGIndex(dw, spriteIndex, subimg);
     if (0 > tpagIndex) return;
@@ -255,14 +255,14 @@ static void Renderer_drawSpritePartExt(Renderer* renderer, int32_t spriteIndex, 
 }
 
 // Partial draw: draw_sprite_part(sprite, subimg, left, top, width, height, x, y)
-static void Renderer_drawSpritePart(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t left, int32_t top, int32_t width, int32_t height, float x, float y) {
+static inline void Renderer_drawSpritePart(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t left, int32_t top, int32_t width, int32_t height, float x, float y) {
     Renderer_drawSpritePartExt(renderer, spriteIndex, subimg, left, top, width, height, x, y, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0xFFFFFF, renderer->drawAlpha);
 }
 
 // Resolves tpag and converts nine-slice bounding-box coords to tpag source-page space for drawTiledPart.
 // Returns false if the resulting region is empty. Adjusts all in/out parameters in place.
 // aX/aY/aW/aH: source coords (in, out). adX/adY/adW/adH: dest coords (in, out; pass nullptr for axes that don't change).
-static bool Renderer_nineSliceAdjustForTiledPart(DataWin* dw, int32_t spriteIndex, int32_t subimg, int32_t* aX, int32_t* aY, int32_t* aW, int32_t* aH, float* adX, float* adY, float* adW, float* adH, int32_t* tpagIndexOut) {
+static inline bool Renderer_nineSliceAdjustForTiledPart(DataWin* dw, int32_t spriteIndex, int32_t subimg, int32_t* aX, int32_t* aY, int32_t* aW, int32_t* aH, float* adX, float* adY, float* adW, float* adH, int32_t* tpagIndexOut) {
     int32_t tpagIndex = Renderer_resolveTPAGIndex(dw, spriteIndex, subimg);
     if (0 > tpagIndex) return false;
     *tpagIndexOut = tpagIndex;
@@ -276,7 +276,7 @@ static bool Renderer_nineSliceAdjustForTiledPart(DataWin* dw, int32_t spriteInde
 
 // Tiles srcW x srcH pixels from (srcX, srcY) horizontally across dstW pixels starting at (dstX, dstY).
 // Mirror mode flips alternate tiles on the horizontal axis.
-static void Renderer_nineSliceTileH(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t srcX, int32_t srcY, int32_t srcW, int32_t srcH, float dstX, float dstY, float dstW, uint8_t mode, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
+static inline void Renderer_nineSliceTileH(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t srcX, int32_t srcY, int32_t srcW, int32_t srcH, float dstX, float dstY, float dstW, uint8_t mode, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
     if (mode != NS_MIRROR && angleDeg == 0.0f && renderer->vtable->drawTiledPart != nullptr) {
         int32_t tpagIndex, aX = srcX, aY = srcY, aW = srcW, aH = srcH;
         float adX = dstX, adY = dstY, adW = dstW;
@@ -302,7 +302,7 @@ static void Renderer_nineSliceTileH(Renderer* renderer, int32_t spriteIndex, int
 
 // Tiles srcW x srcH pixels from (srcX, srcY) vertically across dstH pixels starting at (dstX, dstY).
 // Mirror mode flips alternate tiles on the vertical axis.
-static void Renderer_nineSliceTileV(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t srcX, int32_t srcY, int32_t srcW, int32_t srcH, float dstX, float dstY, float dstH, uint8_t mode, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
+static inline void Renderer_nineSliceTileV(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t srcX, int32_t srcY, int32_t srcW, int32_t srcH, float dstX, float dstY, float dstH, uint8_t mode, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
     if (mode != NS_MIRROR && angleDeg == 0.0f && renderer->vtable->drawTiledPart != nullptr) {
         int32_t tpagIndex, aX = srcX, aY = srcY, aW = srcW, aH = srcH;
         float adX = dstX, adY = dstY, adH = dstH;
@@ -327,7 +327,7 @@ static void Renderer_nineSliceTileV(Renderer* renderer, int32_t spriteIndex, int
 }
 
 // Tiles a 2D region across dstW x dstH. Mirror flips alternate tiles on each axis independently.
-static void Renderer_nineSliceTile2D(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t srcX, int32_t srcY, int32_t srcW, int32_t srcH, float dstX, float dstY, float dstW, float dstH, uint8_t mode, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
+static inline void Renderer_nineSliceTile2D(Renderer* renderer, int32_t spriteIndex, int32_t subimg, int32_t srcX, int32_t srcY, int32_t srcW, int32_t srcH, float dstX, float dstY, float dstW, float dstH, uint8_t mode, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
     if (mode != NS_MIRROR && angleDeg == 0.0f && renderer->vtable->drawTiledPart != nullptr) {
         int32_t tpagIndex, aX = srcX, aY = srcY, aW = srcW, aH = srcH;
         float adX = dstX, adY = dstY, adW = dstW, adH = dstH;
@@ -366,7 +366,7 @@ static void Renderer_nineSliceTile2D(Renderer* renderer, int32_t spriteIndex, in
     }
 }
 
-static void Renderer_drawSpriteNineSlice(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float w, float h, bool flipX, bool flipY, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
+static inline void Renderer_drawSpriteNineSlice(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float w, float h, bool flipX, bool flipY, float angleDeg, float pivotX, float pivotY, uint32_t color, float alpha) {
     DataWin* dw = renderer->dataWin;
     if (0 > spriteIndex || dw->sprt.count <= (uint32_t) spriteIndex) return;
     Sprite* sprite = &dw->sprt.sprites[spriteIndex];
@@ -459,13 +459,13 @@ static void Renderer_drawSpriteNineSlice(Renderer* renderer, int32_t spriteIndex
 }
 
 // Resolves a BGND index to its TPAG index.
-static int32_t Renderer_resolveBackgroundTPAGIndex(DataWin* dataWin, int32_t bgndIndex) {
+static inline int32_t Renderer_resolveBackgroundTPAGIndex(DataWin* dataWin, int32_t bgndIndex) {
     if (0 > bgndIndex || (uint32_t) bgndIndex >= dataWin->bgnd.count) return -1;
     return dataWin->bgnd.backgrounds[bgndIndex].tpagIndex;
 }
 
 // Resolves a SPRT index to the TPAG index of its first frame.
-static int32_t Renderer_resolveSpriteTPAGIndex(DataWin* dataWin, int32_t sprtIndex) {
+static inline int32_t Renderer_resolveSpriteTPAGIndex(DataWin* dataWin, int32_t sprtIndex) {
     if (0 > sprtIndex || (uint32_t) sprtIndex >= dataWin->sprt.count) return -1;
     Sprite* spr = &dataWin->sprt.sprites[sprtIndex];
     if (spr->textureCount == 0) return -1;
@@ -473,7 +473,7 @@ static int32_t Renderer_resolveSpriteTPAGIndex(DataWin* dataWin, int32_t sprtInd
 }
 
 // Resolves a SPRT or BGND index to a TPAG index
-static int32_t Renderer_resolveObjectTPAGIndex(DataWin* dataWin, RoomTile *tile) {
+static inline int32_t Renderer_resolveObjectTPAGIndex(DataWin* dataWin, RoomTile *tile) {
     if (!tile->useSpriteDefinition)
         return Renderer_resolveBackgroundTPAGIndex(dataWin, tile->backgroundDefinition);
     else
@@ -482,7 +482,7 @@ static int32_t Renderer_resolveObjectTPAGIndex(DataWin* dataWin, RoomTile *tile)
 
 // Tiled draws.
 // This will use a specialized vtable->drawTiled implementation, but if it doesn't, it will fall back to "manual" tiled rendering.
-static void Renderer_drawTiled(Renderer* renderer, int32_t tpagIndex, float originX, float originY, float x, float y, float xscale, float yscale, bool tileX, bool tileY, float roomW, float roomH, uint32_t color, float alpha) {
+static inline void Renderer_drawTiled(Renderer* renderer, int32_t tpagIndex, float originX, float originY, float x, float y, float xscale, float yscale, bool tileX, bool tileY, float roomW, float roomH, uint32_t color, float alpha) {
     // Use the renderer's fast drawTiled path if it has one
     if (renderer->vtable->drawTiled != nullptr) {
         renderer->vtable->drawTiled(renderer, tpagIndex, originX, originY, x, y, xscale, yscale, tileX, tileY, roomW, roomH, color, alpha);
@@ -523,7 +523,7 @@ static void Renderer_drawTiled(Renderer* renderer, int32_t tpagIndex, float orig
 }
 
 // Draws a tiled background
-static void Renderer_drawBackgroundTiled(Renderer* renderer, int32_t tpagIndex, float bgX, float bgY, bool tileX, bool tileY, float roomW, float roomH, float alpha) {
+static inline void Renderer_drawBackgroundTiled(Renderer* renderer, int32_t tpagIndex, float bgX, float bgY, bool tileX, bool tileY, float roomW, float roomH, float alpha) {
     DataWin* dw = renderer->dataWin;
     if (0 > tpagIndex || (uint32_t) tpagIndex >= dw->tpag.count) return;
 
@@ -531,7 +531,7 @@ static void Renderer_drawBackgroundTiled(Renderer* renderer, int32_t tpagIndex, 
 }
 
 // Draws a tiled sprite across the room
-static void Renderer_drawSpriteTiled(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float xscale, float yscale, float roomW, float roomH, uint32_t color, float alpha) {
+static inline void Renderer_drawSpriteTiled(Renderer* renderer, int32_t spriteIndex, int32_t subimg, float x, float y, float xscale, float yscale, float roomW, float roomH, uint32_t color, float alpha) {
     DataWin* dw = renderer->dataWin;
     int32_t tpagIndex = Renderer_resolveTPAGIndex(dw, spriteIndex, subimg);
     if (0 > tpagIndex) return;
@@ -544,7 +544,7 @@ static void Renderer_drawSpriteTiled(Renderer* renderer, int32_t spriteIndex, in
 }
 
 // Default draw: draws instance's sprite using its image_* properties
-static void Renderer_drawSelf(Renderer* renderer, Instance* instance) {
+static inline void Renderer_drawSelf(Renderer* renderer, Instance* instance) {
     if (0 > instance->spriteIndex) return;
 
     int32_t subimg = (int32_t) instance->imageIndex;
@@ -563,7 +563,7 @@ static void Renderer_drawSelf(Renderer* renderer, Instance* instance) {
 }
 
 // Draws a room tile with layer shift offset applied
-static void Renderer_drawTile(Renderer* renderer, RoomTile* tile, float offsetX, float offsetY) {
+static inline void Renderer_drawTile(Renderer* renderer, RoomTile* tile, float offsetX, float offsetY) {
     // If the platform has a dedicated tile renderer, use it (PS2 has separate tile atlas entries)
     if (renderer->vtable->drawTile != nullptr) {
         renderer->vtable->drawTile(renderer, tile, offsetX, offsetY);
@@ -624,7 +624,7 @@ static void Renderer_drawTile(Renderer* renderer, RoomTile* tile, float offsetX,
 }
 
 // Native runner clamps to [4, 64] and rounds down to the nearest multiple of 4.
-static int32_t Renderer_normalizeCirclePrecision(int32_t precision) {
+static inline int32_t Renderer_normalizeCirclePrecision(int32_t precision) {
     if (4 > precision) precision = 4;
     if (precision > 64) precision = 64;
     return precision & 0x7C;
@@ -632,7 +632,7 @@ static int32_t Renderer_normalizeCirclePrecision(int32_t precision) {
 
 // draw_circle helper: approximates a circle as a polygon with "circlePrecision" segments.
 // Filled: triangle fan from center. Outline: line strip around the perimeter.
-static void Renderer_drawCircle(Renderer* renderer, float cx, float cy, float radius, bool outline) {
+static inline void Renderer_drawCircle(Renderer* renderer, float cx, float cy, float radius, bool outline) {
     int32_t segments = Renderer_normalizeCirclePrecision(renderer->circlePrecision);
     if (4 > segments) segments = 4;
 

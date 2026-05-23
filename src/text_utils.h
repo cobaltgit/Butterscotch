@@ -245,7 +245,131 @@ static inline int32_t TextUtils_skipNewline(const char* text, int32_t lineEnd, i
     return next;
 }
 
-static char* TextUtils_trimTrailingWhitespace(char* str) {
+// Port of yyFontManager.prototype.Split_TextBlock from GameMaker-HTML5 to C.
+// Pass "0 > maxWidth" to disable wrapping (returns the original pointer non-owning).
+static inline PreprocessedText TextUtils_wrapText(Font* font, const char* text, int32_t maxWidth) {
+    if (text == nullptr) return (PreprocessedText) { .text = text, .owning = false };
+
+    int32_t len = (int32_t) strlen(text);
+    if (0 == len) return (PreprocessedText) { .text = text, .owning = false };
+
+    int32_t linewidth = (0 > maxWidth) ? 10000000 : maxWidth; // means nothing will "wrap"
+
+    // Worst case: each byte becomes itself plus a '\n' separator.
+    char* out = safeMalloc((size_t) len * 2 + 1);
+    int32_t outLen = 0;
+    bool wroteAny = false;
+
+    // put newlines in
+    const char* pNew = text;
+    char lastChar = pNew[0];
+    int32_t start = 0;
+    int32_t end = 0;
+
+    while (len > start) {
+        float total = 0.0f;
+
+        // If width < 0 (i.e. no wrapping required), then we DON'T strip spaces from the start... we just copy it!  (sounds wrong.. but its what they do...)
+        if (linewidth == 10000000) {
+            while (len > end && pNew[end] != '\n' && pNew[end] != '\r') {
+                end++;
+                if (len > end) lastChar = pNew[end];
+                else lastChar = '\0';
+            }
+            char endByte = (len > end) ? pNew[end] : '\0';
+
+            if (lastChar == '\n' && endByte == '\r') { end++; continue; } // ignore, we've already split the line on #10
+            if (lastChar == '\r' && endByte == '\n') { end++; continue; } // ignore, we've already split the line on #13
+
+            lastChar = endByte;
+
+            // add into our list...
+            if (wroteAny) out[outLen++] = '\n';
+            memcpy(out + outLen, pNew + start, (size_t) (end - start));
+            outLen += end - start;
+            wroteAny = true;
+        } else {
+            // Skip leading whitespace
+            while (len > end && (float) linewidth > total) {
+                if (pNew[end] != ' ') break;
+                FontGlyph* spGlyph = TextUtils_findGlyph(font, (uint16_t) ' ');
+                total += (spGlyph != nullptr) ? (float) spGlyph->shift : 0.0f;
+                end++;
+            }
+
+            // Loop through string and get the number of chars that will fit in the line.
+            while (len > end && (float) linewidth > total) {
+                if (pNew[end] == '\n') break; // if we hit a newline, then "break" here...
+                int32_t tentative = end;
+                uint16_t cp = TextUtils_decodeUtf8(pNew, len, &tentative); // advance `end` by one codepoint
+                FontGlyph* glyph = TextUtils_findGlyph(font, cp);
+                float size = (glyph != nullptr) ? (float) glyph->shift : 0.0f; // width of character
+                float newTotal = total + size;
+                // Won't fit, bail out!
+                if (newTotal > (float) linewidth) break;
+                // It fits :3
+                total = newTotal;
+                end = tentative;
+            }
+
+            // END of line
+            if (len > end && pNew[end] == '\n') {
+                if (wroteAny) out[outLen++] = '\n';
+                memcpy(out + outLen, pNew + start, (size_t) (end - start));
+                outLen += end - start;
+                wroteAny = true;
+            } else {
+                // NOT a new line, but we didn't move on... fatal error. Probably a single char doesn't even fit!
+                if (end == start) {
+                    out[outLen] = '\0';
+                    return (PreprocessedText){ .text = out, .owning = true };
+                }
+
+                // If we don't END on a "space", OR if the next character isn't a space AS WELL.
+                // then backtrack to the start of the last "word"
+                if (end != len) {
+                    // This replaces the "if ((pNew[end] != whitespace) || (pNew[end] != whitespace && pNew[end + 1] != whitespace))" check
+                    bool nextNotSpace = (end + 1 >= len) || (pNew[end + 1] != ' ');
+                    if ((pNew[end] != ' ') || (pNew[end] != ' ' && nextNotSpace)) {
+                        int32_t e = end;
+                        while (e > start) {
+                            e--;
+                            if (pNew[e] == ' ') break; // FOUND start of word
+                        }
+
+                        if (e != start) {
+                            end = e;
+                        } else {
+                            // This is where we diverge from the GameMaker-HTML5 behavior to match how the original runner works
+                            // The GameMaker-HTML5 runner does NOT wrap if it doesn't fit AND none of the characters are space, and we WANT that
+                        }
+                    }
+                }
+                int32_t _end = end;
+                if (_end > start) {
+                    while (_end > 0 && pNew[_end - 1] == ' ') _end--;
+                }
+                //  else if (end == start) // if we're back to the START of the string... look for the next space - or string end.
+                //  {
+                //      while (pNew[end] != whitespace && end < len)
+                //          end++;
+                //  }
+
+                if (_end != start) {
+                    if (wroteAny) out[outLen++] = '\n';
+                    memcpy(out + outLen, pNew + start, (size_t) (_end - start));
+                    outLen += _end - start;
+                    wroteAny = true;
+                }
+            }
+        }
+        start = ++end;
+    }
+    out[outLen] = '\0';
+    return (PreprocessedText) { .text = out, .owning = true };
+}
+
+static inline char* TextUtils_trimTrailingWhitespace(char* str) {
     size_t len = strlen(str);
     while (len > 0 && (TextUtils_isWhitespaceChar(str[len - 1]) || TextUtils_isNewlineChar(str[len - 1]))) {
         len--;

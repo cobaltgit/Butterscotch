@@ -141,6 +141,7 @@ typedef struct {
     bool headless;
     bool traceFrames;
     bool printRooms;
+    bool printObjects;
     bool printDeclaredFunctions;
     int exitAtFrame;
     int traceBytecodeAfterFrame;
@@ -218,6 +219,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"screenshot-surfaces-at-frame", required_argument, nullptr, 'V'},
         {"headless",            no_argument,       nullptr, 'h'},
         {"print-rooms", no_argument,               nullptr, 'r'},
+        {"print-objects", no_argument,             nullptr, 'b'},
         {"print-declared-functions", no_argument,  nullptr, 'p'},
         {"trace-variable-reads", required_argument,  nullptr, 'R'},
         {"trace-variable-writes", required_argument, nullptr, 'W'},
@@ -309,6 +311,9 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
                 break;
             case 'r':
                 args->printRooms = true;
+                break;
+            case 'b':
+                args->printObjects = true;
                 break;
             case 'p':
                 args->printDeclaredFunctions = true;
@@ -928,6 +933,47 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    if (args.printObjects) {
+        forEachIndexed(GameObject, obj, idx, dataWin->objt.objects, dataWin->objt.count) {
+            uint32_t totalEvents = 0;
+            repeat(OBJT_EVENT_TYPE_COUNT, e) {
+                totalEvents += obj->eventLists[e].eventCount;
+            }
+            printf("[%u] %s:\n", idx, obj->name);
+            if (obj->parentId >= 0 && (uint32_t) obj->parentId < dataWin->objt.count) {
+                printf("  Parent: %s (%d)\n", dataWin->objt.objects[obj->parentId].name, obj->parentId);
+            } else {
+                printf("  Parent: none\n");
+            }
+            if (obj->spriteId >= 0 && (uint32_t) obj->spriteId < dataWin->sprt.count) {
+                printf("  Sprite: %s (%d)\n", dataWin->sprt.sprites[obj->spriteId].name, obj->spriteId);
+            } else {
+                printf("  Sprite: none\n");
+            }
+            printf("  Solid: %d\n", obj->solid);
+            printf("  Persistent: %d\n", obj->persistent);
+            printf("  Visible: %d\n", obj->visible);
+            printf("  Depth: %d\n", obj->depth);
+            printf("  Events (%u):\n", totalEvents);
+            repeat(OBJT_EVENT_TYPE_COUNT, e) {
+                ObjectEventList* list = &obj->eventLists[e];
+                repeat(list->eventCount, eIdx) {
+                    ObjectEvent* event = &list->events[eIdx];
+                    const char* eventName = Runner_getEventName((int32_t) e, (int32_t) event->eventSubtype);
+                    int32_t codeId = -1;
+                    if (event->actionCount > 0) codeId = event->actions[0].codeId;
+                    printf("    %s:\n", eventName);
+                    printf("      Sub Type: %u\n", event->eventSubtype);
+                    printf("      Code ID: %d\n", codeId);
+                    printf("      Actions: %u\n", event->actionCount);
+                }
+            }
+        }
+        VM_free(vm);
+        DataWin_free(dataWin);
+        return 0;
+    }
+
     if (args.printDeclaredFunctions) {
         repeat(hmlen(vm->codeIndexByName), i) {
             printf("[%d] %s\n", vm->codeIndexByName[i].value, vm->codeIndexByName[i].key);
@@ -1159,6 +1205,7 @@ int main(int argc, char* argv[]) {
         globalInputRecording = InputRecording_createRecorder(args.recordInputsPath);
     }
     if (globalInputRecording != nullptr) {
+        globalInputRecording->filterDebugKeys = args.debug;
         installCrashHandlers();
     }
     shcopyFromTo(args.varReadsToBeTraced, runner->vmContext->varReadsToBeTraced);
@@ -1226,9 +1273,6 @@ int main(int argc, char* argv[]) {
         GlfwGamepad_poll(runner->gamepads);
 #endif
 
-        // Process input recording/playback (must happen after glfwPollEvents, before Runner_step)
-        InputRecording_processFrame(globalInputRecording, runner->keyboard, runner->frameCount);
-
         // Debug key bindings
         if (runner->debugMode) {
             // Pause
@@ -1236,8 +1280,27 @@ int main(int argc, char* argv[]) {
                 debugPaused = !debugPaused;
                 fprintf(stderr, "Debug: %s\n", debugPaused ? "Paused" : "Resumed");
             }
+        }
 
-            // Go to next room
+        // Run the game step if the game is paused
+        bool shouldStep = true;
+        if (runner->debugMode && debugPaused) {
+            shouldStep = RunnerKeyboard_checkPressed(runner->keyboard, 'O');
+            if (shouldStep) fprintf(stderr, "Debug: Frame advance (frame %d)\n", runner->frameCount);
+        }
+
+        double frameStartTime = 0;
+
+        if (shouldStep) {
+            if (args.traceFrames) {
+                frameStartTime = glfwGetTime();
+                fprintf(stderr, "Frame %d (Start)\n", runner->frameCount);
+            }
+
+            // Process input recording/playback (must happen after glfwPollEvents, before Runner_step)
+            InputRecording_processFrame(globalInputRecording, runner->keyboard, runner->frameCount);
+
+                        // Go to next room
             if (RunnerKeyboard_checkPressed(runner->keyboard, VK_PAGEUP)) {
                 DataWin* dw = runner->dataWin;
                 if ((int32_t) dw->gen8.roomOrderCount > runner->currentRoomOrderPosition + 1) {
@@ -1301,23 +1364,7 @@ int main(int argc, char* argv[]) {
                 runner->vmContext->globalVars[interactVarId] = RValue_makeInt32(0);
                 printf("Changed global.interact [%d] value!\n", interactVarId);
             }
-        }
-
-        // Run the game step if the game is paused
-        bool shouldStep = true;
-        if (runner->debugMode && debugPaused) {
-            shouldStep = RunnerKeyboard_checkPressed(runner->keyboard, 'O');
-            if (shouldStep) fprintf(stderr, "Debug: Frame advance (frame %d)\n", runner->frameCount);
-        }
-
-        double frameStartTime = 0;
-
-        if (shouldStep) {
-            if (args.traceFrames) {
-                frameStartTime = glfwGetTime();
-                fprintf(stderr, "Frame %d (Start)\n", runner->frameCount);
-            }
-
+            
             // Run one game step (Begin Step, Keyboard, Alarms, Step, End Step, room transitions)
             Runner_step(runner);
 
@@ -1361,117 +1408,117 @@ int main(int argc, char* argv[]) {
                 }
                 free(json);
             }
-        }
 
-        // Query actual framebuffer size (differs from window size on Wayland with fractional scaling)
-        int fbWidth, fbHeight;
+            // Query actual framebuffer size (differs from window size on Wayland with fractional scaling)
+            int fbWidth, fbHeight;
 #ifdef USE_GLFW2
-        glfwGetWindowSize(&fbWidth, &fbHeight);
+            glfwGetWindowSize(&fbWidth, &fbHeight);
 #else
-        glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+            glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
 #endif
 
-        // Clear the default framebuffer (window background) to black
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glClear(GL_COLOR_BUFFER_BIT);
+            // Clear the default framebuffer (window background) to black
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glClear(GL_COLOR_BUFFER_BIT);
 
-        if (!runner->appSurfaceEnabled) {
-            runner->applicationWidth = fbWidth;
-            runner->applicationHeight = fbHeight;
-            runner->usingAppSurface = false;
-        } else {
-            if (runner->applicationWidth <= 0 || runner->applicationHeight <= 0) {
-                runner->applicationWidth = (int32_t) gen8->defaultWindowWidth;
-                runner->applicationHeight = (int32_t) gen8->defaultWindowHeight;
+            if (!runner->appSurfaceEnabled) {
+                runner->applicationWidth = fbWidth;
+                runner->applicationHeight = fbHeight;
+                runner->usingAppSurface = false;
+            } else {
+                if (runner->applicationWidth <= 0 || runner->applicationHeight <= 0) {
+                    runner->applicationWidth = (int32_t) gen8->defaultWindowWidth;
+                    runner->applicationHeight = (int32_t) gen8->defaultWindowHeight;
+                }
+                runner->usingAppSurface = true;
             }
-            runner->usingAppSurface = true;
-        }
 
-        int32_t gameW = runner->applicationWidth;
-        int32_t gameH = runner->applicationHeight;
+            int32_t gameW = runner->applicationWidth;
+            int32_t gameH = runner->applicationHeight;
 
-        // The application surface (FBO) is sized to defaultWindowWidth x defaultWindowHeight.
-        // It is a bit hard to understand, but here's how it works:
-        // The Port X/Port Y controls the position of the game viewport within the application surface.
-        // The Port W/Port H controls the size of the game viewport within the application surface.
-        // Think of it like if you had an image (or... well, a framebuffer) and you are "pasting" it over the application surface.
-        // And the Port W/Port H are scaled by the window size too (set by the GEN8 chunk)
-        float displayScaleX;
-        float displayScaleY;
+            // The application surface (FBO) is sized to defaultWindowWidth x defaultWindowHeight.
+            // It is a bit hard to understand, but here's how it works:
+            // The Port X/Port Y controls the position of the game viewport within the application surface.
+            // The Port W/Port H controls the size of the game viewport within the application surface.
+            // Think of it like if you had an image (or... well, a framebuffer) and you are "pasting" it over the application surface.
+            // And the Port W/Port H are scaled by the window size too (set by the GEN8 chunk)
+            float displayScaleX;
+            float displayScaleY;
 
-        Runner_drawPre(runner, fbWidth, fbHeight);
-        Runner_computeViewDisplayScale(runner, gameW, gameH, &displayScaleX, &displayScaleY);
+            Runner_drawPre(runner, fbWidth, fbHeight);
+            Runner_computeViewDisplayScale(runner, gameW, gameH, &displayScaleX, &displayScaleY);
 
-        Runner_beginFrame(runner, gameW, gameH, fbWidth, fbHeight);
+            Runner_beginFrame(runner, gameW, gameH, fbWidth, fbHeight);
 
-        // Clear FBO with room background color
-        if (runner->drawBackgroundColor) {
-            int rInt = BGR_R(runner->backgroundColor);
-            int gInt = BGR_G(runner->backgroundColor);
-            int bInt = BGR_B(runner->backgroundColor);
-            int aInt = BGR_A(runner->backgroundColor);
-            glClearColor(rInt / 255.0f, gInt / 255.0f, bInt / 255.0f, aInt / 255.0f);
-        } else {
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        }
-        glClear(GL_COLOR_BUFFER_BIT);
+            // Clear FBO with room background color
+            if (runner->drawBackgroundColor) {
+                int rInt = BGR_R(runner->backgroundColor);
+                int gInt = BGR_G(runner->backgroundColor);
+                int bInt = BGR_B(runner->backgroundColor);
+                int aInt = BGR_A(runner->backgroundColor);
+                glClearColor(rInt / 255.0f, gInt / 255.0f, bInt / 255.0f, aInt / 255.0f);
+            } else {
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            }
+            glClear(GL_COLOR_BUFFER_BIT);
 
-        Runner_drawViews(runner, gameW, gameH, displayScaleX, displayScaleY, debugShowCollisionMasks);
-        renderer->vtable->endFrameInit(renderer);
-        Runner_drawPost(runner, fbWidth, fbHeight);
-        renderer->vtable->endFrameEnd(renderer);
-        Runner_drawGUI(runner, fbWidth, fbHeight, gameW, gameH);
+            Runner_drawViews(runner, gameW, gameH, displayScaleX, displayScaleY, debugShowCollisionMasks);
+            renderer->vtable->endFrameInit(renderer);
+            Runner_drawPost(runner, fbWidth, fbHeight);
+            renderer->vtable->endFrameEnd(renderer);
+            Runner_drawGUI(runner, fbWidth, fbHeight, gameW, gameH);
 
-        // Capture screenshot if this frame matches a requested frame
-        bool shouldScreenshot = hmget(args.screenshotFrames, runner->frameCount);
+            // Capture screenshot if this frame matches a requested frame
+            bool shouldScreenshot = hmget(args.screenshotFrames, runner->frameCount);
 
-        if (shouldScreenshot) {
-            int32_t appId = runner->applicationSurfaceId;
-            GLuint readFbo;
+            if (shouldScreenshot) {
+                int32_t appId = runner->applicationSurfaceId;
+                GLuint readFbo;
 #ifdef ENABLE_LEGACY_GL
-            if (strcmp(args.renderer, "legacy-gl") == 0) {
-                readFbo = ((GLLegacyRenderer*) renderer)->surfaces[appId];
-            } else
+                if (strcmp(args.renderer, "legacy-gl") == 0) {
+                    readFbo = ((GLLegacyRenderer*) renderer)->surfaces[appId];
+                } else
 #endif
-            {
-                readFbo = ((GLRenderer*) renderer)->surfaces[appId];
+                {
+                    readFbo = ((GLRenderer*) renderer)->surfaces[appId];
+                }
+                captureScreenshot(readFbo, args.screenshotPattern, runner->frameCount, gameW, gameH);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
             }
-            captureScreenshot(readFbo, args.screenshotPattern, runner->frameCount, gameW, gameH);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        }
 
-        // Dump all surfaces if this frame matches a requested frame
-        bool shouldDumpSurfaces = hmget(args.screenshotSurfacesFrames, runner->frameCount);
+            // Dump all surfaces if this frame matches a requested frame
+            bool shouldDumpSurfaces = hmget(args.screenshotSurfacesFrames, runner->frameCount);
 
-        if (shouldDumpSurfaces) {
-            GLRenderer* gl = (GLRenderer*) renderer;
-            dumpAllSurfaces(gl, args.screenshotSurfacesPattern, runner->frameCount);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        }
+            if (shouldDumpSurfaces) {
+                GLRenderer* gl = (GLRenderer*) renderer;
+                dumpAllSurfaces(gl, args.screenshotSurfacesPattern, runner->frameCount);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            }
 
-        if (args.exitAtFrame >= 0 && runner->frameCount >= args.exitAtFrame) {
-            printf("Exiting at frame %d (--exit-at-frame)\n", runner->frameCount);
+            if (args.exitAtFrame >= 0 && runner->frameCount >= args.exitAtFrame) {
+                printf("Exiting at frame %d (--exit-at-frame)\n", runner->frameCount);
 #ifdef USE_GLFW2
-            glfwCloseWindow();
+                glfwCloseWindow();
 #else
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
 #endif
-        }
+            }
 
-        if (shouldStep && args.traceFrames) {
-            double frameElapsedMs = (glfwGetTime() - frameStartTime) * 1000.0;
-            fprintf(stderr, "Frame %d (End, %.2f ms)\n", runner->frameCount, frameElapsedMs);
-        }
+            if (shouldStep && args.traceFrames) {
+                double frameElapsedMs = (glfwGetTime() - frameStartTime) * 1000.0;
+                fprintf(stderr, "Frame %d (End, %.2f ms)\n", runner->frameCount, frameElapsedMs);
+            }
 
-        // Only swap when there isn't a room change to match the original runner.
-        if (runner->pendingRoom == -1) {
+            // Only swap when there isn't a room change to match the original runner.
+            if (runner->pendingRoom == -1) {
 #ifdef USE_GLFW2
-            glfwSwapBuffers();
+                glfwSwapBuffers();
 #else
-            glfwSwapBuffers(window);
+                glfwSwapBuffers(window);
 #endif
+            }
+            Runner_handlePendingRoomChange(runner);
         }
-        Runner_handlePendingRoomChange(runner);
 
         // Limit frame rate to room speed (skip in headless mode for max speed!!)
         if (!args.headless && runner->currentRoom->speed > 0) {
