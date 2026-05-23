@@ -5298,6 +5298,28 @@ static RValue builtin_keyboard_clear(VMContext* ctx, RValue* args, int32_t argCo
     return RValue_makeUndefined();
 }
 
+static RValue builtin_keyboard_set_map(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (2 > argCount) return RValue_makeUndefined();
+    Runner* runner = ctx->runner;
+    int32_t fromKey = RValue_toInt32(args[0]);
+    int32_t toKey = RValue_toInt32(args[1]);
+    RunnerKeyboard_setMap(runner->keyboard, fromKey, toKey);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_keyboard_get_map(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeReal(0.0);
+    Runner* runner = ctx->runner;
+    int32_t fromKey = RValue_toInt32(args[0]);
+    return RValue_makeReal((GMLReal) RunnerKeyboard_getMap(runner->keyboard, fromKey));
+}
+
+static RValue builtin_keyboard_unset_map(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    RunnerKeyboard_unsetMap(runner->keyboard);
+    return RValue_makeUndefined();
+}
+
 // ===[ Joystick Functions ]===
 static RValue builtin_joystick_exists(VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) return RValue_makeBool(false);
@@ -11448,6 +11470,9 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "keyboard_key_press", builtin_keyboard_key_press);
     VM_registerBuiltin(ctx, "keyboard_key_release", builtin_keyboard_key_release);
     VM_registerBuiltin(ctx, "keyboard_clear", builtin_keyboard_clear);
+    VM_registerBuiltin(ctx, "keyboard_set_map", builtin_keyboard_set_map);
+    VM_registerBuiltin(ctx, "keyboard_get_map", builtin_keyboard_get_map);
+    VM_registerBuiltin(ctx, "keyboard_unset_map", builtin_keyboard_unset_map);
 
     // Joystick
     if (!isGMS2) {
