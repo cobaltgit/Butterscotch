@@ -73,9 +73,9 @@ static inline InstanceBBox Collision_computeBBox(Runner* runner, Instance* inst)
             if (cy[c] > maxY) maxY = cy[c];
         }
 
-        left = inst->x + minX;
-        right = inst->x + maxX;
-        top = inst->y + minY;
+        left   = inst->x + minX;
+        right  = inst->x + maxX;
+        top    = inst->y + minY;
         bottom = inst->y + maxY;
     } else {
         // No rotation fast path
