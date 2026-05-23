@@ -268,6 +268,7 @@ static const BuiltinVarEntry BUILTIN_VAR_TABLE[] = {
     { "image_blend", BUILTIN_VAR_IMAGE_BLEND },
     { "image_index", BUILTIN_VAR_IMAGE_INDEX },
     { "image_number", BUILTIN_VAR_IMAGE_NUMBER },
+    { "image_single", BUILTIN_VAR_IMAGE_SINGLE },
     { "image_speed", BUILTIN_VAR_IMAGE_SPEED },
     { "image_xscale", BUILTIN_VAR_IMAGE_XSCALE },
     { "image_yscale", BUILTIN_VAR_IMAGE_YSCALE },
@@ -503,6 +504,13 @@ RValue VMBuiltins_getVariable(VMContext* ctx, int16_t builtinVarId, const char* 
                 return RValue_makeReal((GMLReal) sprite->textureCount);
             }
             return RValue_makeReal(0.0);
+        }
+        case BUILTIN_VAR_IMAGE_SINGLE: {
+            if (inst == nullptr) break;
+            if (inst->imageSpeed == 0.0) {
+                return RValue_makeReal((GMLReal) inst->imageIndex);
+            }
+            return RValue_makeReal(-1.0);
         }
         case BUILTIN_VAR_SPRITE_INDEX:
             if (inst == nullptr) break;
@@ -997,6 +1005,17 @@ void VMBuiltins_setVariable(VMContext* ctx, int16_t builtinVarId, const char* na
             if (inst == nullptr) break;
             inst->imageBlend = (uint32_t) RValue_toReal(val);
             return;
+        case BUILTIN_VAR_IMAGE_SINGLE: {
+            if (inst == nullptr) break;
+            float value = (float) RValue_toReal(val);
+            if (value < 0.0) {
+                inst->imageSpeed = 1.0;
+            } else {
+                inst->imageSpeed = 0.0;
+                inst->imageIndex = value;
+            }
+            return;
+        }
         case BUILTIN_VAR_SPRITE_INDEX: {
             if (inst == nullptr) break;
             int32_t value = RValue_toInt32(val);
