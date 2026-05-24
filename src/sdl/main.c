@@ -93,6 +93,7 @@ typedef struct {
     const char* renderer;
     YoYoOperatingSystem osType;
     bool lazyRooms;
+    bool lazyTextures;
     StringBooleanEntry* eagerRooms; // stb_ds string-keyed set of room names
     int profilerFramesBetween; // 0 = disabled
 #ifdef ENABLE_VM_OPCODE_PROFILER
@@ -189,6 +190,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"playback-inputs", required_argument, nullptr, 'P'},
         {"renderer", required_argument, nullptr, 'g'},
         {"lazy-rooms", no_argument, nullptr, 'z'},
+        {"lazy-textures", no_argument, nullptr, 't'},
         {"eager-room", required_argument, nullptr, 'G'},
         {"os-type", required_argument, nullptr, 'O'},
         {"profile-gml-scripts", required_argument, nullptr, 'q'},
@@ -358,6 +360,9 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
                 break;
             case 'z':
                 args->lazyRooms = true;
+                break;
+            case 't':
+                args->lazyTextures = true;
                 break;
             case 'G':
                 shput(args->eagerRooms, optarg, true);
@@ -680,6 +685,7 @@ int main(int argc, char* argv[]) {
             .parseAudo = true,
             .skipLoadingPreciseMasksForNonPreciseSprites = true,
             .lazyLoadRooms = args.lazyRooms,
+            .lazyLoadTextures = args.lazyTextures,
             .eagerlyLoadedRooms = args.eagerRooms
         }
     );
