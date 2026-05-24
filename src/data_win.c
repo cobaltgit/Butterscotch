@@ -2247,13 +2247,15 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
         // Bulk-read the chunk data into memory for fast parsing
         uint8_t* chunkBuffer = nullptr;
         if (shouldParse && chunkLength > 0) {
-            chunkBuffer = safeMalloc(chunkLength);
-            size_t read = fread(chunkBuffer, 1, chunkLength, reader.file);
-            if (read != chunkLength) {
-                fprintf(stderr, "DataWin: short read on chunk %.4s (expected %u, got %zu)\n", chunkName, chunkLength, read);
-                exit(1);
+            chunkBuffer = malloc(chunkLength);
+            if (chunkBuffer) {
+                size_t read = fread(chunkBuffer, 1, chunkLength, reader.file);
+                if (read != chunkLength) {
+                    fprintf(stderr, "DataWin: short read on chunk %.4s (expected %u, got %zu)\n", chunkName, chunkLength, read);
+                    exit(1);
+                }
+                BinaryReader_setBuffer(&reader, chunkBuffer, chunkDataStart, chunkLength);
             }
-            BinaryReader_setBuffer(&reader, chunkBuffer, chunkDataStart, chunkLength);
         }
 
         if (options.parseGen8 && memcmp(chunkName, "GEN8", 4) == 0) {
