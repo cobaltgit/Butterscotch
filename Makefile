@@ -4,7 +4,6 @@
 CC := cc
 
 CFLAGS := -O2 -DNDEBUG
-LIBS :=
 
 OS := $(shell uname -s)
 
