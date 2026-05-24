@@ -4355,29 +4355,29 @@ static RValue builtin_sound_play(VMContext* ctx, RValue* args, MAYBE_UNUSED int3
 }
 
 // same as builtin_sound_play with loop enabled
-static RValue builtin_sound_loop(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {   
+static RValue builtin_sound_loop(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     AudioSystem* audio = getAudioSystem(ctx);
     if (audio == nullptr) return RValue_makeReal(-1.0);
-    
+
     // Do not attempt to play "undefined" sounds
     if (args[0].type == RVALUE_UNDEFINED)
         return RValue_makeReal(-1.0);
-    
+
     int32_t soundIndex = RValue_toInt32(args[0]);
     int32_t instanceId = audio->vtable->playSound(audio, soundIndex, 10, true);
     return RValue_makeReal((GMLReal) instanceId);
 }
 
-static RValue builtin_sound_volume(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {   
+static RValue builtin_sound_volume(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     AudioSystem* audio = getAudioSystem(ctx);
     if (audio == nullptr) return RValue_makeUndefined();
-    
+
     int32_t soundIndex = RValue_toInt32(args[0]);
     float volume = (float) RValue_toReal(args[1]);
 
     // Set timeMs to 0 for immediate change
     audio->vtable->setSoundGain(audio, soundIndex, volume, 0);
-    
+
     return RValue_makeUndefined();
 }
 
@@ -8956,6 +8956,17 @@ static RValue builtin_action_if_variable(VMContext* ctx, MAYBE_UNUSED RValue* ar
     return result;
 }
 
+static RValue builtin_action_if_dice(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (1 > argCount) return RValue_makeBool(false);
+
+    int32_t probability = RValue_toInt32(args[0]);
+    if (probability <= 1) {
+        return RValue_makeBool(probability > 0);
+    }
+
+    return RValue_makeBool((rand() % probability) == 0);
+}
+
 #define LEGACY_DND_CMP_EQ 0
 #define LEGACY_DND_CMP_LT 1
 #define LEGACY_DND_CMP_GT 2
@@ -12057,6 +12068,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "get_timer", builtin_get_timer);
     if (!isGMS2) {
         VM_registerBuiltin(ctx, "action_if_variable", builtin_action_if_variable);
+        VM_registerBuiltin(ctx, "action_if_dice", builtin_action_if_dice);
         VM_registerBuiltin(ctx, "action_set_alarm", builtin_action_set_alarm);
         VM_registerBuiltin(ctx, "action_set_score", builtin_action_set_score);
         VM_registerBuiltin(ctx, "action_if_score", builtin_action_if_score);
