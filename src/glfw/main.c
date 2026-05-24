@@ -143,6 +143,7 @@ typedef struct {
     bool printRooms;
     bool printObjects;
     bool printDeclaredFunctions;
+    bool printUnknownFunctions;
     int exitAtFrame;
     int traceBytecodeAfterFrame;
     double speedMultiplier;
@@ -221,6 +222,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"print-rooms", no_argument,               nullptr, 'r'},
         {"print-objects", no_argument,             nullptr, 'b'},
         {"print-declared-functions", no_argument,  nullptr, 'p'},
+        {"print-unknown-functions", no_argument, nullptr, 'u'},
         {"trace-variable-reads", required_argument,  nullptr, 'R'},
         {"trace-variable-writes", required_argument, nullptr, 'W'},
         {"trace-function-calls", required_argument,         nullptr, 'c'},
@@ -317,6 +319,9 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
                 break;
             case 'p':
                 args->printDeclaredFunctions = true;
+                break;
+            case 'u':
+                args->printUnknownFunctions = true;
                 break;
             case 'R':
                 shput(args->varReadsToBeTraced, optarg, true);
@@ -977,6 +982,36 @@ int main(int argc, char* argv[]) {
     if (args.printDeclaredFunctions) {
         repeat(hmlen(vm->codeIndexByName), i) {
             printf("[%d] %s\n", vm->codeIndexByName[i].value, vm->codeIndexByName[i].key);
+        }
+        VM_free(vm);
+        DataWin_free(dataWin);
+        return 0;
+    }
+
+    if (args.printUnknownFunctions) {
+        uint32_t unimplementedCount = 0;
+        fprintf(stderr, "Unknown Functions:\n");
+        repeat(dataWin->func.functionCount, i) {
+            const char* name = dataWin->func.functions[i].name;
+            if (name == nullptr)
+                continue;
+
+            // Implemented as a user script/code entry?
+            if (shgeti(vm->codeIndexByName, (char*) name) >= 0)
+                continue;
+
+            // Implemented as a registered builtin?
+            if (VM_findBuiltin(vm, name) != nullptr)
+                continue;
+
+            fprintf(stderr, "- %s\n", name);
+            unimplementedCount++;
+        }
+
+        if (unimplementedCount == 0) {
+            fprintf(stderr, "All %u referenced functions are implemented! :3\n", dataWin->func.functionCount);
+        } else {
+            fprintf(stderr, "%u unknown function(s) out of %u referenced\n", unimplementedCount, dataWin->func.functionCount);
         }
         VM_free(vm);
         DataWin_free(dataWin);
