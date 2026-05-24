@@ -268,6 +268,7 @@ static const BuiltinVarEntry BUILTIN_VAR_TABLE[] = {
     { "image_blend", BUILTIN_VAR_IMAGE_BLEND },
     { "image_index", BUILTIN_VAR_IMAGE_INDEX },
     { "image_number", BUILTIN_VAR_IMAGE_NUMBER },
+    { "image_single", BUILTIN_VAR_IMAGE_SINGLE },
     { "image_speed", BUILTIN_VAR_IMAGE_SPEED },
     { "image_xscale", BUILTIN_VAR_IMAGE_XSCALE },
     { "image_yscale", BUILTIN_VAR_IMAGE_YSCALE },
@@ -337,6 +338,11 @@ static const BuiltinVarEntry BUILTIN_VAR_TABLE[] = {
     { "sprite_width", BUILTIN_VAR_SPRITE_WIDTH },
     { "sprite_xoffset", BUILTIN_VAR_SPRITE_XOFFSET },
     { "sprite_yoffset", BUILTIN_VAR_SPRITE_YOFFSET },
+    { "timeline_index", BUILTIN_VAR_TIMELINE_INDEX },
+    { "timeline_loop", BUILTIN_VAR_TIMELINE_LOOP },
+    { "timeline_position", BUILTIN_VAR_TIMELINE_POSITION },
+    { "timeline_running", BUILTIN_VAR_TIMELINE_RUNNING },
+    { "timeline_speed", BUILTIN_VAR_TIMELINE_SPEED },
     { "true", BUILTIN_VAR_TRUE },
     { "undefined", BUILTIN_VAR_UNDEFINED },
     { "view_angle", BUILTIN_VAR_VIEW_ANGLE },
@@ -504,6 +510,13 @@ RValue VMBuiltins_getVariable(VMContext* ctx, int16_t builtinVarId, const char* 
             }
             return RValue_makeReal(0.0);
         }
+        case BUILTIN_VAR_IMAGE_SINGLE: {
+            if (inst == nullptr) break;
+            if (inst->imageSpeed == 0.0) {
+                return RValue_makeReal((GMLReal) inst->imageIndex);
+            }
+            return RValue_makeReal(-1.0);
+        }
         case BUILTIN_VAR_SPRITE_INDEX:
             if (inst == nullptr) break;
             return RValue_makeReal((GMLReal) inst->spriteIndex);
@@ -652,6 +665,23 @@ RValue VMBuiltins_getVariable(VMContext* ctx, int16_t builtinVarId, const char* 
         case BUILTIN_VAR_PATH_ENDACTION:
             if (inst == nullptr) break;
             return RValue_makeReal((GMLReal) inst->pathEndAction);
+
+        // Timeline instance variables
+        case BUILTIN_VAR_TIMELINE_INDEX:
+            if (inst == nullptr) break;
+            return RValue_makeReal((GMLReal) inst->timelineIndex);
+        case BUILTIN_VAR_TIMELINE_POSITION:
+            if (inst == nullptr) break;
+            return RValue_makeReal(inst->timelinePosition);
+        case BUILTIN_VAR_TIMELINE_SPEED:
+            if (inst == nullptr) break;
+            return RValue_makeReal(inst->timelineSpeed);
+        case BUILTIN_VAR_TIMELINE_RUNNING:
+            if (inst == nullptr) break;
+            return RValue_makeBool(inst->timelineRunning);
+        case BUILTIN_VAR_TIMELINE_LOOP:
+            if (inst == nullptr) break;
+            return RValue_makeBool(inst->timelineLoop);
 
         // Room properties
         case BUILTIN_VAR_ROOM:
@@ -997,6 +1027,17 @@ void VMBuiltins_setVariable(VMContext* ctx, int16_t builtinVarId, const char* na
             if (inst == nullptr) break;
             inst->imageBlend = (uint32_t) RValue_toReal(val);
             return;
+        case BUILTIN_VAR_IMAGE_SINGLE: {
+            if (inst == nullptr) break;
+            float value = (float) RValue_toReal(val);
+            if (value < 0.0) {
+                inst->imageSpeed = 1.0;
+            } else {
+                inst->imageSpeed = 0.0;
+                inst->imageIndex = value;
+            }
+            return;
+        }
         case BUILTIN_VAR_SPRITE_INDEX: {
             if (inst == nullptr) break;
             int32_t value = RValue_toInt32(val);
@@ -1165,6 +1206,35 @@ void VMBuiltins_setVariable(VMContext* ctx, int16_t builtinVarId, const char* na
         case BUILTIN_VAR_PATH_ENDACTION:
             if (inst == nullptr) break;
             inst->pathEndAction = RValue_toInt32(val);
+            return;
+
+        // Timeline instance variables
+        case BUILTIN_VAR_TIMELINE_INDEX: {
+            if (inst == nullptr) break;
+            int32_t newIdx = RValue_toInt32(val);
+            uint32_t tmlnCount = runner->dataWin->tmln.count;
+            if (newIdx >= 0 && (uint32_t) newIdx >= tmlnCount) newIdx = -1;
+            if (inst->timelineIndex != newIdx) {
+                inst->timelineIndex = newIdx;
+                inst->timelinePosition = 0.0f;
+            }
+            return;
+        }
+        case BUILTIN_VAR_TIMELINE_POSITION:
+            if (inst == nullptr) break;
+            inst->timelinePosition = (float) RValue_toReal(val);
+            return;
+        case BUILTIN_VAR_TIMELINE_SPEED:
+            if (inst == nullptr) break;
+            inst->timelineSpeed = (float) RValue_toReal(val);
+            return;
+        case BUILTIN_VAR_TIMELINE_LOOP:
+            if (inst == nullptr) break;
+            inst->timelineLoop = RValue_toBool(val);
+            return;
+        case BUILTIN_VAR_TIMELINE_RUNNING:
+            if (inst == nullptr) break;
+            inst->timelineRunning = RValue_toBool(val);
             return;
 
         // Keyboard variables
@@ -4258,13 +4328,40 @@ static RValue builtin_sound_play(VMContext* ctx, RValue* args, MAYBE_UNUSED int3
     AudioSystem* audio = getAudioSystem(ctx);
     if (audio == nullptr) return RValue_makeReal(-1.0);
 
-    // Do not attempt to play "undefined" sounds (matches GameMaker-HTML5 behavior, and fixes random sound effects on room transitions in DELTARUNE Chapter 2)
+    // Do not attempt to play "undefined" sounds
     if (args[0].type == RVALUE_UNDEFINED)
         return RValue_makeReal(-1.0);
 
     int32_t soundIndex = RValue_toInt32(args[0]);
     int32_t instanceId = audio->vtable->playSound(audio, soundIndex, 10, false);
     return RValue_makeReal((GMLReal) instanceId);
+}
+
+// same as builtin_sound_play with loop enabled
+static RValue builtin_sound_loop(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {   
+    AudioSystem* audio = getAudioSystem(ctx);
+    if (audio == nullptr) return RValue_makeReal(-1.0);
+    
+    // Do not attempt to play "undefined" sounds
+    if (args[0].type == RVALUE_UNDEFINED)
+        return RValue_makeReal(-1.0);
+    
+    int32_t soundIndex = RValue_toInt32(args[0]);
+    int32_t instanceId = audio->vtable->playSound(audio, soundIndex, 10, true);
+    return RValue_makeReal((GMLReal) instanceId);
+}
+
+static RValue builtin_sound_volume(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {   
+    AudioSystem* audio = getAudioSystem(ctx);
+    if (audio == nullptr) return RValue_makeUndefined();
+    
+    int32_t soundIndex = RValue_toInt32(args[0]);
+    float volume = (float) RValue_toReal(args[1]);
+
+    // Set timeMs to 0 for immediate change
+    audio->vtable->setSoundGain(audio, soundIndex, volume, 0);
+    
+    return RValue_makeUndefined();
 }
 
 static RValue builtin_audio_play_sound(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
@@ -4279,6 +4376,20 @@ static RValue builtin_audio_play_sound(VMContext* ctx, RValue* args, MAYBE_UNUSE
     int32_t priority = RValue_toInt32(args[1]);
     bool loop = RValue_toBool(args[2]);
     int32_t instanceId = audio->vtable->playSound(audio, soundIndex, priority, loop);
+    return RValue_makeReal((GMLReal) instanceId);
+}
+
+static RValue builtin_action_sound(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    AudioSystem* audio = getAudioSystem(ctx);
+    if (audio == nullptr) return RValue_makeReal(-1.0);
+
+    // Do not attempt to play "undefined" sounds
+    if (args[0].type == RVALUE_UNDEFINED)
+        return RValue_makeReal(-1.0);
+
+    int32_t soundIndex = RValue_toInt32(args[0]);
+    bool loop = RValue_toBool(args[1]);
+    int32_t instanceId = audio->vtable->playSound(audio, soundIndex, 10, loop);
     return RValue_makeReal((GMLReal) instanceId);
 }
 
@@ -4385,18 +4496,27 @@ static RValue builtin_audio_group_is_loaded(VMContext* ctx, RValue* args, MAYBE_
 }
 
 static RValue builtin_audio_play_music(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->dataWin->gen8.bytecodeVersion >= 14) {
+        fprintf(stderr, "VM: [%s] audio_play_music is no-op in bytecode version 14+!\n", ctx->currentCodeName);
+        return RValue_makeUndefined();
+    }
+
     AudioSystem* audio = getAudioSystem(ctx);
     if (audio == nullptr) return RValue_makeReal(-1.0);
     int32_t soundIndex = RValue_toInt32(args[0]);
-    int32_t priority = RValue_toInt32(args[1]);
-    bool loop = RValue_toBool(args[2]);
+    bool loop = RValue_toBool(args[1]);
     Runner* runner = ctx->runner;
-    int32_t instanceId = audio->vtable->playSound(audio, soundIndex, priority, loop);
+    int32_t instanceId = audio->vtable->playSound(audio, soundIndex, 10, loop);
     runner->lastMusicInstance = instanceId;
     return RValue_makeReal((GMLReal) instanceId);
 }
 
 static RValue builtin_audio_stop_music(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->dataWin->gen8.bytecodeVersion >= 14) {
+        fprintf(stderr, "VM: [%s] audio_stop_music is no-op in bytecode version 14+!\n", ctx->currentCodeName);
+        return RValue_makeUndefined();
+    }
+
     AudioSystem* audio = getAudioSystem(ctx);
     if (audio == nullptr) return RValue_makeUndefined();
     Runner* runner = ctx->runner;
@@ -4843,6 +4963,32 @@ static RValue builtin_file_exists(VMContext* ctx, RValue* args, int32_t argCount
     return RValue_makeBool(fs->vtable->fileExists(fs, path));
 }
 
+static RValue builtin_directory_exists(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeBool(false);
+    const char* path = (args[0].type == RVALUE_STRING ? args[0].string : "");
+    Runner* runner = (Runner*) ctx->runner;
+    FileSystem* fs = runner->fileSystem;
+    return RValue_makeBool(fs->vtable->directoryExists(fs, path));
+}
+
+static RValue builtin_directory_create(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeUndefined();
+    const char* path = (args[0].type == RVALUE_STRING ? args[0].string : "");
+    Runner* runner = (Runner*) ctx->runner;
+    FileSystem* fs = runner->fileSystem;
+    fs->vtable->createDirectory(fs, path);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_directory_destroy(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeUndefined();
+    const char* path = (args[0].type == RVALUE_STRING ? args[0].string : "");
+    Runner* runner = (Runner*) ctx->runner;
+    FileSystem* fs = runner->fileSystem;
+    fs->vtable->deleteDirectory(fs, path);
+    return RValue_makeUndefined();
+}
+
 static RValue builtin_file_text_open_read(VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) return RValue_makeReal(-1.0);
     const char* path = (args[0].type == RVALUE_STRING ? args[0].string : "");
@@ -5223,6 +5369,28 @@ static RValue builtin_keyboard_clear(VMContext* ctx, RValue* args, int32_t argCo
     Runner* runner = ctx->runner;
     int32_t key = RValue_toInt32(args[0]);
     RunnerKeyboard_clear(runner->keyboard, key);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_keyboard_set_map(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (2 > argCount) return RValue_makeUndefined();
+    Runner* runner = ctx->runner;
+    int32_t fromKey = RValue_toInt32(args[0]);
+    int32_t toKey = RValue_toInt32(args[1]);
+    RunnerKeyboard_setMap(runner->keyboard, fromKey, toKey);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_keyboard_get_map(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeReal(0.0);
+    Runner* runner = ctx->runner;
+    int32_t fromKey = RValue_toInt32(args[0]);
+    return RValue_makeReal((GMLReal) RunnerKeyboard_getMap(runner->keyboard, fromKey));
+}
+
+static RValue builtin_keyboard_unset_map(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    RunnerKeyboard_unsetMap(runner->keyboard);
     return RValue_makeUndefined();
 }
 
@@ -6378,7 +6546,74 @@ static RValue builtin_buffer_save(MAYBE_UNUSED VMContext* ctx, RValue* args, MAY
     return RValue_makeUndefined();
 }
 
-STUB_RETURN_ZERO(buffer_base64_encode)
+static RValue builtin_buffer_save_ext(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    FileSystem* fs = runner->fileSystem;
+    int32_t id = RValue_toInt32(args[0]);
+    char* filename = RValue_toString(args[1]);
+    int32_t offset = RValue_toInt32(args[2]);
+    size_t size = RValue_toInt32(args[3]);
+    GmlBuffer* buf = gmlBufferGet(runner, id);
+
+    if (buf != nullptr && size > 0 && offset >= 0) {
+        int32_t maxBoundary = (buf->type == GML_BUFFER_GROW) ? buf->usedSize : buf->size;
+
+        if (offset < maxBoundary) {
+            if (offset + size > maxBoundary) {
+                size = maxBoundary - offset;
+            }
+
+            fs->vtable->writeFileBinary(fs, filename, buf->data + offset, size);
+        }
+    }
+
+    free(filename);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_buffer_base64_encode(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    if (3 > argCount) return RValue_makeOwnedString(safeStrdup(""));
+
+    int32_t id = RValue_toInt32(args[0]);
+    GmlBuffer* buf = gmlBufferGet(runner, id);
+    if (buf == nullptr) return RValue_makeOwnedString(safeStrdup(""));
+
+    int32_t offset = RValue_toInt32(args[1]);
+    size_t size = RValue_toInt32(args[2]);
+
+    int32_t maxBoundary = (buf->type == GML_BUFFER_GROW) ? buf->usedSize : buf->size;
+
+    if (offset < 0 || offset >= maxBoundary || size <= 0) {
+        return RValue_makeOwnedString(safeStrdup(""));
+    }
+
+    if (offset + size > (size_t)maxBoundary) {
+        size = (size_t)(maxBoundary - offset);
+    }
+
+    char* out = safeMalloc(BASE64_ENCODE_OUT_SIZE(size));
+    base64_encode((const unsigned char*) buf->data + offset, size, out);
+    return RValue_makeOwnedString(out);
+}
+
+static RValue builtin_buffer_base64_decode(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    if (2 > argCount) return RValue_makeOwnedString(safeStrdup(""));
+    char* input = RValue_toString(args[1]);
+    unsigned int inLen = (unsigned int) strlen(input);
+    size_t outLen = BASE64_DECODE_OUT_SIZE(inLen);
+    char* out = safeMalloc(outLen);
+    base64_decode((const unsigned char*) input, inLen, out);
+    free(input);
+    int32_t id = gmlBufferCreate(runner, outLen, GML_BUFFER_GROW, 1);
+    GmlBuffer* buf = gmlBufferGet(runner, id);
+    free(buf->data);
+    buf->data = out;
+    buf->size = outLen;
+    buf->usedSize = outLen;
+    return RValue_makeReal((GMLReal) id);
+}
 
 static RValue builtin_base64_encode(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     if (1 > argCount) return RValue_makeOwnedString(safeStrdup(""));
@@ -7167,6 +7402,21 @@ static RValue builtin_draw_line(VMContext* ctx, RValue* args, MAYBE_UNUSED int32
         float x2 = (float) RValue_toReal(args[2]);
         float y2 = (float) RValue_toReal(args[3]);
         runner->renderer->vtable->drawLine(runner->renderer, x1, y1, x2, y2, 1.0f, runner->renderer->drawColor, runner->renderer->drawAlpha);
+    }
+    return RValue_makeUndefined();
+}
+
+// draw_line_colour(x1, y1, x2, y2, col1, col2)
+static RValue builtin_draw_line_colour(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    if (runner->renderer != nullptr) {
+        float x1 = (float) RValue_toReal(args[0]);
+        float y1 = (float) RValue_toReal(args[1]);
+        float x2 = (float) RValue_toReal(args[2]);
+        float y2 = (float) RValue_toReal(args[3]);
+        float col1 = (float) RValue_toReal(args[4]);
+        float col2 = (float) RValue_toReal(args[5]);
+        runner->renderer->vtable->drawLineColor(runner->renderer, x1, y1, x2, y2, 1.0f, col1, col2, runner->renderer->drawAlpha);
     }
     return RValue_makeUndefined();
 }
@@ -8689,8 +8939,6 @@ static RValue builtin_action_if_variable(VMContext* ctx, MAYBE_UNUSED RValue* ar
     return result;
 }
 
-STUB_RETURN_UNDEFINED(action_sound)
-
 #define LEGACY_DND_CMP_EQ 0
 #define LEGACY_DND_CMP_LT 1
 #define LEGACY_DND_CMP_GT 2
@@ -10101,6 +10349,114 @@ static RValue builtin_path_delete(VMContext* ctx, RValue* args, int32_t argCount
     return RValue_makeUndefined();
 }
 
+// ===[ TIMELINE FUNCTIONS ]===
+
+static Timeline* resolveTimeline(Runner* runner, RValue arg) {
+    int32_t idx = RValue_toInt32(arg);
+    if (0 > idx || (uint32_t) idx >= runner->dataWin->tmln.count) return nullptr;
+    Timeline* tl = &runner->dataWin->tmln.timelines[idx];
+    if (!tl->present) return nullptr;
+    return tl;
+}
+
+// timeline_exists(ind)
+static RValue builtin_timeline_exists(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeBool(false);
+    return RValue_makeBool(resolveTimeline(ctx->runner, args[0]) != nullptr);
+}
+
+// timeline_get_name(ind)
+static RValue builtin_timeline_get_name(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeOwnedString(safeStrdup("<undefined>"));
+    Timeline* tl = resolveTimeline(ctx->runner, args[0]);
+    if (tl == nullptr || tl->name == nullptr) return RValue_makeOwnedString(safeStrdup("<undefined>"));
+    return RValue_makeOwnedString(safeStrdup(tl->name));
+}
+
+// timeline_max_moment(ind) - highest step number, or -1 if empty
+static RValue builtin_timeline_max_moment(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeReal(-1.0);
+    Timeline* tl = resolveTimeline(ctx->runner, args[0]);
+    if (tl == nullptr || tl->momentCount == 0) return RValue_makeReal(-1.0);
+    return RValue_makeReal((GMLReal) tl->moments[tl->momentCount - 1].step);
+}
+
+// timeline_size(ind) - number of moments
+static RValue builtin_timeline_size(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeReal(0.0);
+    Timeline* tl = resolveTimeline(ctx->runner, args[0]);
+    if (tl == nullptr) return RValue_makeReal(0.0);
+    return RValue_makeReal((GMLReal) tl->momentCount);
+}
+
+// action_timeline_set's "pausedKind" argument from the DnD editor. Values >= TIMELINE_ACTION_KIND_STOP map to "stop" (treated like pause).
+#define TIMELINE_ACTION_KIND_PLAY 0
+#define TIMELINE_ACTION_KIND_PAUSE 1
+#define TIMELINE_ACTION_KIND_STOP 2
+
+// action_timeline_set's "loop" argument: TIMELINE_ACTION_LOOP_YES = looping, anything else = no loop.
+#define TIMELINE_ACTION_LOOP_YES 1
+
+static RValue builtin_action_timeline_start(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->currentInstance != nullptr) ctx->currentInstance->timelineRunning = true;
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_action_timeline_pause(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->currentInstance != nullptr) ctx->currentInstance->timelineRunning = false;
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_action_timeline_stop(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->currentInstance != nullptr) {
+        ctx->currentInstance->timelinePosition = 0.0f;
+        ctx->currentInstance->timelineRunning = false;
+    }
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_action_set_timeline_position(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->currentInstance == nullptr) return RValue_makeUndefined();
+    float pos = (float) RValue_toReal(args[0]);
+    if (ctx->actionRelativeFlag) pos += ctx->currentInstance->timelinePosition;
+    ctx->currentInstance->timelinePosition = pos;
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_action_set_timeline_speed(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->currentInstance == nullptr) return RValue_makeUndefined();
+    float spd = (float) RValue_toReal(args[0]);
+    if (ctx->actionRelativeFlag) spd += ctx->currentInstance->timelineSpeed;
+    ctx->currentInstance->timelineSpeed = spd;
+    return RValue_makeUndefined();
+}
+
+// action_set_timeline(index, position) - sets timeline index, marks as running, jumps to position
+static RValue builtin_action_set_timeline(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->currentInstance == nullptr) return RValue_makeUndefined();
+    Instance* inst = ctx->currentInstance;
+    inst->timelineIndex = RValue_toInt32(args[0]);
+    inst->timelineRunning = true;
+    inst->timelinePosition = (float) RValue_toReal(args[1]);
+    return RValue_makeUndefined();
+}
+
+// action_timeline_set(index, position, pausedKind, loop)
+static RValue builtin_action_timeline_set(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->currentInstance == nullptr) return RValue_makeUndefined();
+    Instance* inst = ctx->currentInstance;
+    int32_t idx = RValue_toInt32(args[0]);
+    float pos = (float) RValue_toReal(args[1]);
+    int32_t pausedKind = RValue_toInt32(args[2]);
+    int32_t loop = RValue_toInt32(args[3]);
+
+    inst->timelineIndex = idx;
+    inst->timelinePosition = pos;
+    inst->timelineRunning = pausedKind == TIMELINE_ACTION_KIND_PLAY;
+    inst->timelineLoop = loop == TIMELINE_ACTION_LOOP_YES;
+    return RValue_makeUndefined();
+}
+
 // ===[ ANIMCURVE FUNCTIONS ]===
 
 // Resolve the first argument of animcurve_get_channel / animcurve_get_channel_index, which can be either an animcurve asset id (int / assetref) or a curve struct/object reference.
@@ -11213,10 +11569,12 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "audio_create_stream", builtin_audio_create_stream);
     VM_registerBuiltin(ctx, "audio_destroy_stream", builtin_audio_destroy_stream);
     if (!isGMS2) {
-        VM_registerBuiltin(ctx, "action_sound",builtin_action_sound);
+        VM_registerBuiltin(ctx, "action_sound", builtin_action_sound);
         VM_registerBuiltin(ctx, "action_end_sound", builtin_audio_stop_sound);
         VM_registerBuiltin(ctx, "action_if_sound", builtin_audio_is_playing);
         VM_registerBuiltin(ctx, "sound_play", builtin_sound_play);
+        VM_registerBuiltin(ctx, "sound_loop", builtin_sound_loop);
+        VM_registerBuiltin(ctx, "sound_volume", builtin_sound_volume);
         VM_registerBuiltin(ctx, "sound_exists", builtin_audio_exists); // Replaced with audio_exists in GMS2
         VM_registerBuiltin(ctx, "sound_fade", builtin_audio_sound_gain);
         VM_registerBuiltin(ctx, "sound_global_volume", builtin_audio_master_gain);
@@ -11257,6 +11615,11 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "ini_read_real", builtin_ini_read_real);
     VM_registerBuiltin(ctx, "ini_section_exists", builtin_ini_section_exists);
 
+    // Directory
+    VM_registerBuiltin(ctx, "directory_exists", builtin_directory_exists);
+    VM_registerBuiltin(ctx, "directory_create", builtin_directory_create);
+    VM_registerBuiltin(ctx, "directory_destroy", builtin_directory_destroy);
+
     // File
     VM_registerBuiltin(ctx, "file_exists", builtin_file_exists);
     VM_registerBuiltin(ctx, "file_text_open_write", builtin_file_text_open_write);
@@ -11287,6 +11650,9 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "keyboard_key_press", builtin_keyboard_key_press);
     VM_registerBuiltin(ctx, "keyboard_key_release", builtin_keyboard_key_release);
     VM_registerBuiltin(ctx, "keyboard_clear", builtin_keyboard_clear);
+    VM_registerBuiltin(ctx, "keyboard_set_map", builtin_keyboard_set_map);
+    VM_registerBuiltin(ctx, "keyboard_get_map", builtin_keyboard_get_map);
+    VM_registerBuiltin(ctx, "keyboard_unset_map", builtin_keyboard_unset_map);
 
     // Joystick
     if (!isGMS2) {
@@ -11353,6 +11719,13 @@ void VMBuiltins_registerAll(VMContext* ctx) {
         VM_registerBuiltin(ctx, "action_set_hspeed", builtin_action_set_hspeed);
         VM_registerBuiltin(ctx, "action_set_vspeed", builtin_action_set_vspeed);
         VM_registerBuiltin(ctx, "action_inherited", builtin_event_inherited);
+        VM_registerBuiltin(ctx, "action_timeline_start", builtin_action_timeline_start);
+        VM_registerBuiltin(ctx, "action_timeline_pause", builtin_action_timeline_pause);
+        VM_registerBuiltin(ctx, "action_timeline_stop", builtin_action_timeline_stop);
+        VM_registerBuiltin(ctx, "action_set_timeline_position", builtin_action_set_timeline_position);
+        VM_registerBuiltin(ctx, "action_set_timeline_speed", builtin_action_set_timeline_speed);
+        VM_registerBuiltin(ctx, "action_set_timeline", builtin_action_set_timeline);
+        VM_registerBuiltin(ctx, "action_timeline_set", builtin_action_timeline_set);
     }
     VM_registerBuiltin(ctx, "event_inherited", builtin_event_inherited);
     VM_registerBuiltin(ctx, "event_user", builtin_event_user);
@@ -11368,7 +11741,9 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "buffer_get_size", builtin_buffer_get_size);
     VM_registerBuiltin(ctx, "buffer_load", builtin_buffer_load);
     VM_registerBuiltin(ctx, "buffer_save", builtin_buffer_save);
+    VM_registerBuiltin(ctx, "buffer_save_ext", builtin_buffer_save_ext);
     VM_registerBuiltin(ctx, "buffer_base64_encode", builtin_buffer_base64_encode);
+    VM_registerBuiltin(ctx, "buffer_base64_decode", builtin_buffer_base64_decode);
     VM_registerBuiltin(ctx, "base64_encode", builtin_base64_encode);
     VM_registerBuiltin(ctx, "base64_decode", builtin_base64_decode);
     VM_registerBuiltin(ctx, "buffer_md5", builtin_buffer_md5);
@@ -11437,6 +11812,8 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     }
     VM_registerBuiltin(ctx, "draw_self", builtin_draw_self);
     VM_registerBuiltin(ctx, "draw_line", builtin_draw_line);
+    VM_registerBuiltin(ctx, "draw_line_colour", builtin_draw_line_colour);
+    VM_registerBuiltin(ctx, "draw_line_color", builtin_draw_line_colour); // alt-spelling (used in Undertale)
     VM_registerBuiltin(ctx, "draw_line_width", builtin_draw_line_width);
     VM_registerBuiltin(ctx, "draw_line_width_colour", builtin_draw_line_width_colour);
     VM_registerBuiltin(ctx, "draw_line_width_color", builtin_draw_line_width_colour);
@@ -11632,6 +12009,12 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "path_add_point", builtin_path_add_point);
     VM_registerBuiltin(ctx, "path_exists", builtin_path_exists);
     VM_registerBuiltin(ctx, "path_delete", builtin_path_delete);
+
+    // Timeline
+    VM_registerBuiltin(ctx, "timeline_exists", builtin_timeline_exists);
+    VM_registerBuiltin(ctx, "timeline_get_name", builtin_timeline_get_name);
+    VM_registerBuiltin(ctx, "timeline_max_moment", builtin_timeline_max_moment);
+    VM_registerBuiltin(ctx, "timeline_size", builtin_timeline_size);
 
     // Animation curves
     VM_registerBuiltin(ctx, "animcurve_get", builtin_animcurve_get);

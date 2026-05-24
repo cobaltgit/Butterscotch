@@ -116,13 +116,17 @@ void InputRecording_processFrame(InputRecording* recording, RunnerKeyboardState*
             int32_t* frameKeys = recording->playbackFrames[frameNumber];
             int32_t keyCount = (int32_t) arrlen(frameKeys);
 
-            // Build a temporary "current held" array for this frame
+            // Build a temporary "current held" array for this frame.
+            // Apply the keyboard_set_map translation so playback matches native input semantics.
             bool currentKeyDown[GML_KEY_COUNT];
             memset(currentKeyDown, 0, sizeof(currentKeyDown));
             repeat(keyCount, i) {
                 int32_t key = frameKeys[i];
                 if (GML_KEY_COUNT > key && key >= 0) {
-                    currentKeyDown[key] = true;
+                    int32_t mapped = kb->keyMap[key];
+                    if (GML_KEY_COUNT > mapped && mapped >= 0) {
+                        currentKeyDown[mapped] = true;
+                    }
                 }
             }
 
