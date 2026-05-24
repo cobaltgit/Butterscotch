@@ -65,10 +65,10 @@ static inline InstanceBBox Collision_computeBBox(Runner* runner, Instance* inst)
         cx[2] = cs * lx0 + sn * ly1;  cy[2] = -sn * lx0 + cs * ly1;
         cx[3] = cs * lx1 + sn * ly1;  cy[3] = -sn * lx1 + cs * ly1;
 
-        GMLReal minX = fmin(fmin(cx[0], cx[1]), fmin(cx[2], cx[3]));
-        GMLReal maxX = fmax(fmax(cx[0], cx[1]), fmax(cx[2], cx[3]));
-        GMLReal minY = fmin(fmin(cy[0], cy[1]), fmin(cy[2], cy[3]));
-        GMLReal maxY = fmax(fmax(cy[0], cy[1]), fmax(cy[2], cy[3]));
+        GMLReal minX = GMLReal_fmin(GMLReal_fmin(cx[0], cx[1]), GMLReal_fmin(cx[2], cx[3]));
+        GMLReal maxX = GMLReal_fmax(GMLReal_fmax(cx[0], cx[1]), GMLReal_fmax(cx[2], cx[3]));
+        GMLReal minY = GMLReal_fmin(GMLReal_fmin(cy[0], cy[1]), GMLReal_fmin(cy[2], cy[3]));
+        GMLReal maxY = GMLReal_fmax(GMLReal_fmax(cy[0], cy[1]), GMLReal_fmax(cy[2], cy[3]));
 
         left   = inst->x + minX;
         right  = inst->x + maxX;
@@ -82,10 +82,10 @@ static inline InstanceBBox Collision_computeBBox(Runner* runner, Instance* inst)
         bottom = inst->y + inst->imageYscale * (marginB - originY);
 
         // Normalize if negative scale
-        GMLReal tmp_left   = fmin(left, right);
-        GMLReal tmp_right  = fmax(left, right);
-        GMLReal tmp_top    = fmin(top, bottom);
-        GMLReal tmp_bottom = fmax(top, bottom);
+        GMLReal tmp_left   = GMLReal_fmin(left, right);
+        GMLReal tmp_right  = GMLReal_fmax(left, right);
+        GMLReal tmp_top    = GMLReal_fmin(top, bottom);
+        GMLReal tmp_bottom = GMLReal_fmax(top, bottom);
         left   = tmp_left;
         right  = tmp_right;
         top    = tmp_top;
