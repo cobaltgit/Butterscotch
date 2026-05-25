@@ -412,10 +412,23 @@ static void SWRenderer_endFrameInit(Renderer* renderer)
 	//this is kinda useless to do twice isn't it?
 }
 
+static void SWRenderer_drawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2,
+									float x3, float y3, bool outline);
+
 static void SWRenderer_endFrameEnd(Renderer* renderer)
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
 	assert(!swr->drawingToSurface);
+	
+	static int i = 0;
+	i += 4;
+	i = i % 480;
+	
+	renderer->drawColor = 0xFFFFFF;
+	SWRenderer_drawTriangle(renderer, 320, 480 - i, 620, 240, 20, i, false);
+	//renderer->drawColor = 0xFFFF00;
+	//SWRenderer_drawTriangle(renderer, 320, 40, 20, 440, 620, 360, true);
+	
 	Runner_setNextFrame(swr->fb, swr->width, swr->height);
 }
 
@@ -1333,17 +1346,123 @@ static void SWRenderer_drawLine(Renderer* renderer, float x1, float y1, float x2
 	swrDrawLine(renderer, x1, y1, x2, y2, width, colorCvt, colorCvt, alpha);
 }
 
+static void swrDrawTriangleInternal(SWRenderer* swr, int xup, int yup, int xleft, int yleft, int xright, int yright, uint32_t color, int alpha)
+{
+	// Figure out the maximum Y extent of the triangle.
+	// (Note that we know yup is the minimum.)
+	int xmid, ymid, xmid2, xmax, ymax;
+	if (yleft < yright) {
+		xmax = xright, ymax = yright;
+		xmid = xleft, ymid = yleft;
+		if (yright == yup)
+			xmid2 = xup;
+		else
+			xmid2 = xup + (xright - xup) * (ymid - yup) / (yright - yup);
+	} else {
+		xmax = xleft, ymax = yleft;
+		xmid = xright, ymid = yright;
+		if (yleft == yup)
+			xmid2 = xup;
+		else
+			xmid2 = xup + (xleft - xup) * (ymid - yup) / (yleft - yup);
+	}
+	
+	for (int y = yup; y <= ymax; y++)
+	{
+		if (y < 0) continue;
+		if (y >= swr->height) break;
+		
+		int x1 = xup, x2 = xup;
+		if (y < ymid)
+		{
+			// Lines: between up and mid, and between up and max
+			if (ymid != yup)
+				x1 = xup + (xmid - xup + 1) * (y - yup) / (ymid - yup);
+			
+			if (ymid != yup)
+				x2 = xup + (xmid2 - xup + 1) * (y - yup) / (ymid - yup);
+		}
+		else
+		{
+			// Lines: between mid and max, and between up and max
+			if (ymax != yup)
+				x1 = xup + (xmax - xup + 1) * (y - yup) / (ymax - yup);
+			
+			if (ymax != ymid)
+				x2 = xmid + (xmax - xmid + 1) * (y - ymid) / (ymax - ymid);
+		}
+		
+		if (x1 >= x2) {
+			int tmp = x1;
+			x1 = x2;
+			x2 = tmp;
+		}
+		
+		if (x1 < 0) x1 = 0;
+		if (x1 >= swr->width) return;
+		if (x2 < 0) return;
+		if (x2 >= swr->width) x2 = swr->width - 1;
+		if (x1 > x2) return;
+		
+		uintpixel_t* line = &swr->fb[y * swr->width];
+		for (int x = x1; x <= x2; x++) {
+			alphaBlend(&line[x], color, alpha);
+		}
+	}
+}
+
+static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2, float x3, float y3, uint32_t color, float alpha)
+{
+	float xup, yup, xleft, yleft, xright, yright;
+	
+	//which vertex is higher?
+	xup = x1, yup = y1;
+	xleft = x2, yleft = y2;
+	xright = x3, yright = y3;
+	if (yup > y2) {
+		xup = x2, yup = y2;
+		xleft = x1, yleft = y1;
+		//xright = x3, yright = y3;
+	}
+	if (yup > y3) {
+		xup = x3, yup = y3;
+		xleft = x1, yleft = y1;
+		xright = x2, yright = y2;
+	}
+	
+	if (xleft > xright) {
+		float tmp = xleft;
+		xleft = xright;
+		xright = tmp;
+		tmp = yleft;
+		yleft = yright;
+		yright = tmp;
+	}
+	
+	swrDrawTriangleInternal(
+		(SWRenderer*) renderer,
+		swrFloor(xup), swrFloor(yup),
+		swrFloor(xleft), swrCeiling(yleft),
+		swrFloor(xright), swrCeiling(yright),
+		swrConvertPixel(color),
+		swrIntAlpha(alpha)
+	);
+}
+
 static void SWRenderer_drawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2,
 									float x3, float y3, bool outline)
 {
-	(void)outline;
-	
-	uintpixel_t drawColorCvt = swrConvertPixel(renderer->drawColor);
-	
-	// TODO: draw triangle properly.
-	swrDrawLine(renderer, x1, y1, x2, y2, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
-	swrDrawLine(renderer, x1, y1, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
-	swrDrawLine(renderer, x2, y2, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+	if (outline)
+	{
+		uintpixel_t drawColorCvt = swrConvertPixel(renderer->drawColor);
+		swrDrawLine(renderer, x1, y1, x2, y2, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+		swrDrawLine(renderer, x1, y1, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+		swrDrawLine(renderer, x2, y2, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+	}
+	else
+	{
+		swrDrawTriangle(renderer, x1, y1, x2, y2, x3, y3, renderer->drawColor, renderer->drawAlpha);
+	}
 }
 
 static void SWRenderer_drawLineColor(Renderer* renderer, float x1, float y1, float x2, float y2,
