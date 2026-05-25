@@ -23,7 +23,7 @@ jobs:
       - name: Checkout Butterscotch Wiki repo
         uses: actions/checkout@v4
         with:
-          repository: DataWin
+          repository: ButterscotchRunner/DataWin
           path: Butterscotch.wiki
           token: ${{ secrets.LORITTA_PAT }}
 
