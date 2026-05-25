@@ -412,23 +412,10 @@ static void SWRenderer_endFrameInit(Renderer* renderer)
 	//this is kinda useless to do twice isn't it?
 }
 
-static void SWRenderer_drawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2,
-									float x3, float y3, bool outline);
-
 static void SWRenderer_endFrameEnd(Renderer* renderer)
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
 	assert(!swr->drawingToSurface);
-	
-	static int i = 0;
-	i += 4;
-	i = i % 480;
-	
-	renderer->drawColor = 0xFFFFFF;
-	SWRenderer_drawTriangle(renderer, 320, 480 - i, 620, 240, 20, i, false);
-	//renderer->drawColor = 0xFFFF00;
-	//SWRenderer_drawTriangle(renderer, 320, 40, 20, 440, 620, 360, true);
-	
 	Runner_setNextFrame(swr->fb, swr->width, swr->height);
 }
 
@@ -1415,6 +1402,11 @@ static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, fl
 {
 	float xup, yup, xleft, yleft, xright, yright;
 	
+	SWRenderer* swr = (SWRenderer*) renderer;
+	swrTransformPosIfNeeded(swr, &x1, &y1);
+	swrTransformPosIfNeeded(swr, &x2, &y2);
+	swrTransformPosIfNeeded(swr, &x3, &y3);
+	
 	//which vertex is higher?
 	xup = x1, yup = y1;
 	xleft = x2, yleft = y2;
@@ -1440,7 +1432,7 @@ static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, fl
 	}
 	
 	swrDrawTriangleInternal(
-		(SWRenderer*) renderer,
+		swr,
 		swrFloor(xup), swrFloor(yup),
 		swrFloor(xleft), swrCeiling(yleft),
 		swrFloor(xright), swrCeiling(yright),
