@@ -76,13 +76,34 @@ FORCE_INLINE bool opaque(uintpixel_t color)
 #endif
 }
 
+FORCE_INLINE bool swrMustTint(uintpixel_t tintColor)
+{
+#if PIXEL_SIZE == 8
+	return tintColor != 0xFF && tintColor != PXL_TRANSPARENT;
+#elif PIXEL_SIZE == 16
+	return (tintColor & 0x7FFF) != 0x7FFF;
+#else
+	return (tintColor & 0xFFFFFF) != 0xFFFFFF;
+#endif
+}
+
+FORCE_INLINE bool swrIsAlphaInsignificant(int alpha)
+{
+	return alpha <= 3;
+}
+
+FORCE_INLINE bool swrMustAlphaBlend(int alpha)
+{
+	return alpha > 3 && alpha < 252;
+}
+
 FORCE_INLINE uintpixel_t tint(uintpixel_t tintColor, uintpixel_t color)
 {
+	if (LIKELY(!swrMustTint(tintColor)))
+		return color;
+	
 #if PIXEL_SIZE == 32
 	Pixel32ARGB x, y;
-	
-	if ((tintColor & 0xFFFFFF) == 0xFFFFFF)
-		return color;
 	
 	x.l = color;
 	y.l = tintColor;
@@ -92,9 +113,6 @@ FORCE_INLINE uintpixel_t tint(uintpixel_t tintColor, uintpixel_t color)
 	x.p.r = (int)x.p.r * y.p.r / 255;
 	return x.l;
 #elif PIXEL_SIZE == 16
-	if ((tintColor & 0x7FFF) == 0x7FFF)
-		return color;
-	
 	int tcb = tintColor & 0x1F;
 	int tcg = (tintColor >> 5) & 0x1F;
 	int tcr = (tintColor >> 10) & 0x1F;
@@ -109,10 +127,7 @@ FORCE_INLINE uintpixel_t tint(uintpixel_t tintColor, uintpixel_t color)
 	cr = (cr * tcr) / 32;
 	return ca | cb | (cg << 5) | (cr << 10);
 #elif PIXEL_SIZE == 8
-	// fast but hacky
-	if (tintColor == 0xFF || tintColor == PXL_TRANSPARENT)
-		return color;
-	
+	// fast but VERY inaccurate and hacky
 	return color & tintColor;
 #endif
 }
@@ -120,13 +135,13 @@ FORCE_INLINE uintpixel_t tint(uintpixel_t tintColor, uintpixel_t color)
 // NOTE: alpha is between 0 and 256, NOT between 0 and 255!
 FORCE_INLINE void alphaBlend(uintpixel_t* dcolor, uintpixel_t scolor, int alpha)
 {
-#if PIXEL_SIZE == 32 || PIXEL_SIZE == 16
 	// it's so insignificant here nobody will notice if we just don't...
-	if (alpha < 3)
+	if (UNLIKELY(swrIsAlphaInsignificant(alpha)))
 		return;
 	
+#if PIXEL_SIZE == 32 || PIXEL_SIZE == 16
 	// it's so significant here we might as well fill in the whole color
-	if (alpha > 253)
+	if (LIKELY(alpha > 253))
 	{
 		*dcolor = scolor;
 		return;
@@ -162,7 +177,8 @@ FORCE_INLINE void alphaBlend(uintpixel_t* dcolor, uintpixel_t scolor, int alpha)
 	
 	*dcolor = dca | dcb | (dcg << 5) | (dcr << 10);
 #else
-	if (alpha < 240) {
+	if (UNLIKELY(alpha < 250))
+	{
 		static int alphaApproximationThingy = 0;
 		alphaApproximationThingy += 1339;
 		if (alphaApproximationThingy > 601000)
@@ -589,14 +605,24 @@ static void swrDrawHLineInt(Renderer* renderer, int dx, int dy, int dw, uintpixe
 	if (dx < 0) { dw += dx; dx = 0; }
 	if (dx + dw >= swr->width) dw = swr->width - dx;
 	if (dw <= 0) return;
+	if (UNLIKELY(swrIsAlphaInsignificant(alpha))) return;
+	
+	bool mustAlphaBlend = swrMustAlphaBlend(alpha);
 	
 #if PIXEL_SIZE == 32
 	if (color == color2)
 #endif
 	{
 		uintpixel_t *line = &swr->fb[dy * swr->fbPitch + dx];
-		for (int i = 0; i < dw; i++)
-			alphaBlend(&line[i], color, alpha);
+		
+		if (mustAlphaBlend) {
+			for (int i = 0; i < dw; i++)
+				alphaBlend(&line[i], color, alpha);	
+		}
+		else {
+			for (int i = 0; i < dw; i++)
+				line[i] = color;
+		}
 	}
 #if PIXEL_SIZE == 32
 	else
@@ -652,15 +678,29 @@ static void swrDrawVLineInt(Renderer* renderer, int dx, int dy, int dh, uintpixe
 	if (dy < 0) { dh += dy; dy = 0; }
 	if (dy + dh >= swr->height) dh = swr->height - dy;
 	if (dh <= 0) return;
+	if (UNLIKELY(swrIsAlphaInsignificant(alpha))) return;
+	
+	bool mustAlphaBlend = swrMustAlphaBlend(alpha);
 	
 #if PIXEL_SIZE == 32
 	if (color == color2)
 #endif
 	{
-		for (int i = 0; i < dh; i++)
+		if (mustAlphaBlend)
 		{
-			uintpixel_t *line = &swr->fb[(dy + i) * swr->fbPitch + dx];
-			alphaBlend(&line[0], color, alpha);
+			for (int i = 0; i < dh; i++)
+			{
+				uintpixel_t *line = &swr->fb[(dy + i) * swr->fbPitch + dx];
+				alphaBlend(&line[0], color, alpha);
+			}
+		}
+		else
+		{
+			for (int i = 0; i < dh; i++)
+			{
+				uintpixel_t *line = &swr->fb[(dy + i) * swr->fbPitch + dx];
+				*line = color;
+			}
 		}
 	}
 #if PIXEL_SIZE == 32
@@ -726,6 +766,8 @@ static void swrDrawRectangleColor(Renderer* renderer, float x1, float y1, float 
 
 static void swrDrawLineInt(Renderer* renderer, int x1, int y1, int x2, int y2, int width, uintpixel_t color1, uintpixel_t color2, int alpha)
 {
+	if (UNLIKELY(swrIsAlphaInsignificant(alpha))) return;
+	
 	if (x1 == x2)
 	{
 		swrDrawVLineInt(renderer, x1, swrMin(y1, y2), swrAbs(y1 - y2), color1, color2, alpha);
@@ -874,6 +916,8 @@ static void swrDrawSpriteInternal(
 {
 	SWRenderer *swr = (SWRenderer*) renderer;
 	
+	if (UNLIKELY(swrIsAlphaInsignificant(alpha))) return;
+	
 	bool flipX = false, flipY = false;
 	if (dw < 0) { dx += dw; dw = -dw; flipX = true; }
 	if (dh < 0) { dy += dh; dh = -dh; flipY = true; }
@@ -936,6 +980,9 @@ static void swrDrawSpriteInternal(
 	fixedp_t ixs2 = ixs * xstep;
 	fixedp_t iys2 = iys * ystep;
 	
+	bool mustAlphaBlend = swrMustAlphaBlend(alpha);
+	bool mustTint = swrMustTint(tintColor);
+	
 	if (sw == dw)
 	{
 		fixedp_t ys2 = (fixedp_t) iys2;
@@ -949,11 +996,32 @@ static void swrDrawSpriteInternal(
 			else
 				srcline = &texture->buffer[(sy + (int)(ys2 >> fp_prec)) * texture->width + sx];
 			
-			for (int x = 0, xs = ixs; x < dw; x++, xs += oxs)
+			if (UNLIKELY(mustTint))
 			{
-				uintpixel_t pixel = srcline[xs];
-				if (opaque(pixel))
-					alphaBlend(&dstline[x], tint(tintColor, pixel), alpha);
+				for (int x = 0, xs = ixs; x < dw; x++, xs += oxs)
+				{
+					uintpixel_t pixel = srcline[xs];
+					if (opaque(pixel))
+						alphaBlend(&dstline[x], tint(tintColor, pixel), alpha);
+				}
+			}
+			else if (UNLIKELY(mustAlphaBlend))
+			{
+				for (int x = 0, xs = ixs; x < dw; x++, xs += oxs)
+				{
+					uintpixel_t pixel = srcline[xs];
+					if (opaque(pixel))
+						alphaBlend(&dstline[x], pixel, alpha);
+				}
+			}
+			else
+			{
+				for (int x = 0, xs = ixs; x < dw; x++, xs += oxs)
+				{
+					uintpixel_t pixel = srcline[xs];
+					if (opaque(pixel))
+						dstline[x] = pixel;
+				}
 			}
 		}
 	}
@@ -971,11 +1039,32 @@ static void swrDrawSpriteInternal(
 				srcline = &texture->buffer[(sy + (int)(ys2 >> fp_prec)) * texture->width + sx];
 			
 			fixedp_t xs2 = ixs2;
-			for (int x = 0, xs = ixs; x < dw; x++, xs += oxs, xs2 += oxs2)
+			if (UNLIKELY(mustTint))
 			{
-				uintpixel_t pixel = srcline[(int)(xs2 >> fp_prec)];
-				if (opaque(pixel))
-					alphaBlend(&dstline[x], tint(tintColor, pixel), alpha);
+				for (int x = 0, xs = ixs; x < dw; x++, xs += oxs, xs2 += oxs2)
+				{
+					uintpixel_t pixel = srcline[(int)(xs2 >> fp_prec)];
+					if (opaque(pixel))
+						alphaBlend(&dstline[x], tint(tintColor, pixel), alpha);
+				}
+			}
+			else if (UNLIKELY(mustAlphaBlend))
+			{
+				for (int x = 0, xs = ixs; x < dw; x++, xs += oxs, xs2 += oxs2)
+				{
+					uintpixel_t pixel = srcline[(int)(xs2 >> fp_prec)];
+					if (opaque(pixel))
+						alphaBlend(&dstline[x], pixel, alpha);
+				}
+			}
+			else
+			{
+				for (int x = 0, xs = ixs; x < dw; x++, xs += oxs, xs2 += oxs2)
+				{
+					uintpixel_t pixel = srcline[(int)(xs2 >> fp_prec)];
+					if (opaque(pixel))
+						alphaBlend(&dstline[x], tint(tintColor, pixel), alpha);
+				}
 			}
 		}
 	}
@@ -1017,6 +1106,8 @@ static void swrDrawSpriteRotatedInternal(
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
 	float angleRad = -angleDeg * M_PI / 180.0f;
+	
+	if (UNLIKELY(swrIsAlphaInsignificant(alpha))) return;
 	
 	bool flipX = false, flipY = false;
 	if (dw < 0) { dw = -dw; dx -= dw; pivotX = dw - pivotX; flipX = true; }
