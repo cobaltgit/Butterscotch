@@ -57,7 +57,7 @@ typedef struct
 	bool viewActive;
 	int viewX, viewY, viewW, viewH;
 	int portX, portY, portW, portH;
-	int gameW, gameH;
+	int gameW, gameH, maxX, maxY;
 }
 SWRenderer;
 
@@ -437,14 +437,25 @@ static void SWRenderer_beginView(Renderer* renderer, int32_t viewX, int32_t view
 		UNIMP();
 		xratio = 1.0f;
 		yratio = 1.0f;
+		portX = (int)(portX * xratio);
+		portY = (int)(portY * yratio);
 	}
 	else {
-		xratio = (float) swr->width / swr->gameW;
-		yratio = (float) swr->height / swr->gameH;
-	}
+		float scaleX = (float) swr->width  / swr->gameW;
+		float scaleY = (float) swr->height / swr->gameH;
+		float scale  = (scaleX < scaleY) ? scaleX : scaleY;
 
-	portX = (int)(portX * xratio);
-	portY = (int)(portY * yratio);
+		int32_t scaledW = (int32_t)(swr->gameW * scale);
+		int32_t scaledH = (int32_t)(swr->gameH * scale);
+		int32_t offsetX = (swr->width  - scaledW) / 2;
+		int32_t offsetY = (swr->height - scaledH) / 2;
+
+		xratio = scale;
+		yratio = scale;
+
+		portX = (int)(portX * xratio) + offsetX;
+		portY = (int)(portY * yratio) + offsetY;
+	}
 	portW = (int)(portW * xratio);
 	portH = (int)(portH * yratio);
 	
@@ -457,6 +468,8 @@ static void SWRenderer_beginView(Renderer* renderer, int32_t viewX, int32_t view
 	swr->portY = portY;
 	swr->portW = portW;
 	swr->portH = portH;
+	swr->maxX = portX + portW;
+	swr->maxY = portY + portH;
 }
 
 static void SWRenderer_endView(Renderer* renderer)
@@ -577,8 +590,8 @@ FORCE_INLINE void swrPlotPixel(Renderer* renderer, int x, int y, uintpixel_t col
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
 	
-	if (x < 0 || y < 0) return;
-	if (x >= swr->width || y >= swr->height) return;
+	if (x < swr->portX || y < swr->portY) return;
+	if (x >= swr->maxX || y >= swr->maxY) return;
 	
 	alphaBlend(&swr->fb[y * swr->fbPitch + x], color, alpha);
 }
@@ -587,10 +600,10 @@ static void swrDrawHLineInt(Renderer* renderer, int dx, int dy, int dw, uintpixe
 {
 	SWRenderer *swr = (SWRenderer*) renderer;
 	
-	if (dy < 0) return;
-	if (dy >= swr->height) return;
-	if (dx < 0) { dw += dx; dx = 0; }
-	if (dx + dw >= swr->width) dw = swr->width - dx;
+	if (dy < swr->portY) return;
+	if (dy >= swr->maxY) return;
+	if (dx < swr->portX) { dw += dx; dx = swr->portX; }
+	if (dx + dw >= swr->maxX) dw = swr->maxX - dx;
 	if (dw <= 0) return;
 	
 #if PIXEL_SIZE == 32
@@ -650,10 +663,10 @@ static void swrDrawVLineInt(Renderer* renderer, int dx, int dy, int dh, uintpixe
 {
 	SWRenderer *swr = (SWRenderer*) renderer;
 	
-	if (dx < 0) return;
-	if (dx >= swr->width) return;
-	if (dy < 0) { dh += dy; dy = 0; }
-	if (dy + dh >= swr->height) dh = swr->height - dy;
+	if (dx < swr->portX) return;
+	if (dx >= swr->maxX) return;
+	if (dy < swr->portY) { dh += dy; dy = swr->portY; }
+	if (dy + dh >= swr->maxY) dh = swr->maxY - dy;
 	if (dh <= 0) return;
 	
 #if PIXEL_SIZE == 32
@@ -885,10 +898,10 @@ static void swrDrawSpriteInternal(
 	if (dw == 0 || dh == 0) return;
 	if (sw == 0) sw = 1;
 	if (sh == 0) sh = 1;
-	if (dx + dw <= 0) return;
-	if (dy + dh <= 0) return;
-	if (dx >= swr->width) return;
-	if (dy >= swr->height) return;
+	if (dx + dw <= swr->portX) return;
+	if (dy + dh <= swr->portY) return;
+	if (dx >= swr->maxX) return;
+	if (dy >= swr->maxY) return;
 	
 	int odw = dw, odh = dh;
 	int osw = sw, osh = sh;
@@ -1057,10 +1070,10 @@ static void swrDrawSpriteRotatedInternal(
 	int maxY = swrCeiling(maxYf);
 	
 	// basic out-of-bound checks
-	if (maxX < 0) return;
-	if (maxY < 0) return;
-	if (minX >= swr->width) return;
-	if (minY >= swr->height) return;
+	if (maxX < swr->portX) return;
+	if (maxY < swr->portY) return;
+	if (minX >= swr->maxX) return;
+	if (minY >= swr->maxY) return;
 	
 	// however, we'll need to clip it against out of bounds first
 	int minXc = minX, minYc = minY, maxXc = maxX, maxYc = maxY;
@@ -1378,10 +1391,10 @@ static void swrDrawTriangleInternal(SWRenderer* swr, int xup, int yup, int xleft
 			x2 = tmp;
 		}
 		
-		if (x1 < 0) x1 = 0;
-		if (x1 >= swr->width) continue;
-		if (x2 < 0) continue;
-		if (x2 >= swr->width) x2 = swr->width - 1;
+		if (x1 < swr->portX) x1 = swr->portX;
+		if (x1 >= swr->maxX) continue;
+		if (x2 < swr->portX) continue;
+		if (x2 >= swr->maxX) x2 = swr->maxX - 1;
 		if (x1 > x2) continue;
 		
 		uintpixel_t* line = &swr->fb[y * swr->width];
