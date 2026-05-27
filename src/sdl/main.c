@@ -585,12 +585,10 @@ static bool getSDLWindowSize(void *window, int32_t *outW, int32_t *outH) {
 
 static void setSDLWindowSize(void *window, int32_t width, int32_t height) {
     (void)window;
-    if (useSWRend)
-        return;
     if (width <= 0 || height <= 0) return;
     fbWidth = width;
     fbHeight = height;
-    scr = SDL_SetVideoMode(width, height, 0, useSWRend ? 0 : (SDL_OPENGL | SDL_RESIZABLE));
+    scr = SDL_SetVideoMode(width, height, 0, (useSWRend ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
 }
 
 static bool getSDLWindowFocus(void *window) {
@@ -843,7 +841,7 @@ int main(int argc, char* argv[]) {
     fbWidth = reqW;
     fbHeight = reqH;
     if(!args.headless) {
-        scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, useSWRend ? 0 : (SDL_OPENGL | SDL_RESIZABLE));
+        scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, (useSWRend ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
         if (!scr && useSWRend) {
             SDL_Rect** modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
             if (modes && modes != (SDL_Rect**) -1 && modes[0]) {
@@ -882,13 +880,13 @@ int main(int argc, char* argv[]) {
     Renderer* renderer;
 #if defined(ENABLE_LEGACY_GL) && defined(ENABLE_SW_RENDERER)
     if(useSWRend)
-        renderer = SWRenderer_create(fbWidth, fbHeight);
+        renderer = SWRenderer_create();
     else
         renderer = GLLegacyRenderer_create();
 #elif defined(ENABLE_LEGACY_GL)
     renderer = GLLegacyRenderer_create();
 #else
-    renderer = SWRenderer_create(fbWidth, fbHeight);
+    renderer = SWRenderer_create();
 #endif
 
     // Initialize the audio system
@@ -977,8 +975,6 @@ int main(int argc, char* argv[]) {
                     RunnerKeyboard_onKeyUp(runner->keyboard, SDLKeyToGml(e.key.keysym.sym));
                     break;
                 case SDL_VIDEORESIZE:
-                    if (useSWRend)
-                        break;
                     fbWidth = e.resize.w;
                     fbHeight = e.resize.h;
                     scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, (useSWRend ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
