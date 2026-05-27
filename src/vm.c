@@ -3082,29 +3082,37 @@ static RValue executeLoop(VMContext* ctx) {
                         fastHit = true;
                         break;
                     case 0x45: // Variable -> Bool
-                        if (top->type == RVALUE_INT32) {
-                            top->int32 = top->int32 > 0 ? 1 : 0;
-                            top->type = RVALUE_BOOL;
-                            fastHit = true;
-                        } else if (top->type == RVALUE_BOOL) {
-                            // Already 0/1; nothing to do
-                            fastHit = true;
-                        } else if (top->type == RVALUE_REAL) {
-                            top->int32 = top->real > (GMLReal) 0.5 ? 1 : 0;
-                            top->type = RVALUE_BOOL;
-                            fastHit = true;
+                        switch (top->type) {
+                            case RVALUE_INT32:
+                                top->int32 = top->int32 > 0 ? 1 : 0;
+                                top->type = RVALUE_BOOL;
+                                fastHit = true;
+                                break;
+                            case RVALUE_BOOL:
+                                // Already 0/1; nothing to do
+                                fastHit = true;
+                                break;
+                            case RVALUE_REAL:
+                                top->int32 = top->real > (GMLReal) 0.5 ? 1 : 0;
+                                top->type = RVALUE_BOOL;
+                                fastHit = true;
+                                break;
                         }
                         break;
                     case 0x25: // Variable -> Int32
-                        if (top->type == RVALUE_INT32) {
-                            fastHit = true;
-                        } else if (top->type == RVALUE_BOOL) {
-                            top->type = RVALUE_INT32;
-                            fastHit = true;
-                        } else if (top->type == RVALUE_REAL) {
-                            top->int32 = (int32_t) top->real;
-                            top->type = RVALUE_INT32;
-                            fastHit = true;
+                        switch (top->type) {
+                            case RVALUE_INT32:
+                                fastHit = true;
+                                break;
+                            case RVALUE_BOOL:
+                                top->type = RVALUE_INT32;
+                                fastHit = true;
+                                break;
+                            case RVALUE_REAL:
+                                top->int32 = (int32_t) top->real;
+                                top->type = RVALUE_INT32;
+                                fastHit = true;
+                                break;
                         }
                         break;
                     case 0x02: // Int32 -> Double (Real)
