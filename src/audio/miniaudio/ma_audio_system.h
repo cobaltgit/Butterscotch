@@ -40,3 +40,5 @@ typedef struct {
 } MaAudioSystem;
 
 MaAudioSystem* MaAudioSystem_create(void);
+
+extern AudioSystemVtable maAudioSystemVtable;

@@ -154,6 +154,14 @@ ifeq ($(PLATFORM),sdl)
 SRCS += $(wildcard src/sdl/*.c)
 HEADERS += $(wildcard src/sdl/*.h)
 DEFINES += -DUSE_SDL
+ifeq ($(AUDIO_BACKEND),sdl)
+INCLUDES += -Isrc/audio/sdl -Isrc/audio/miniaudio -Ivendor/miniaudio
+SRCS += $(wildcard src/audio/sdl/*.c)
+SRCS += $(wildcard src/audio/miniaudio/*.c)
+HEADERS += $(wildcard src/audio/sdl/*.h)
+HEADERS += $(wildcard src/audio/miniaudio/*.h)
+DEFINES += -DUSE_SDL_AUDIO
+endif
 ifndef SDL_LIBS
 SDL_LIBS := $(shell pkg-config --libs sdl)
 endif

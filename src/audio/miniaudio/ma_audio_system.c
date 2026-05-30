@@ -688,7 +688,7 @@ static bool maDestroyStream(AudioSystem* audio, int32_t streamIndex) {
 
 // ===[ Vtable ]===
 
-static AudioSystemVtable maAudioSystemVtable = {
+AudioSystemVtable maAudioSystemVtable = {
     .init = maInit,
     .destroy = maDestroy,
     .update = maUpdate,
