@@ -297,8 +297,6 @@ static bool ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId) {
     DataWin* dw = gl->base.dataWin;
     Texture* txtr = &dw->txtr.textures[pageId];
 
-    DataWin_loadTxtrIfNeeded(dw, pageId);
-
     bool gm2022_5 = DataWin_isVersionAtLeast(dw, 2022, 5, 0, 0);
     uint8_t* pixels = ImageDecoder_decodeToRgba(txtr->blobData, (size_t) txtr->blobSize, gm2022_5, &w, &h);
     if (pixels == nullptr) {
