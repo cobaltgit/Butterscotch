@@ -41,8 +41,6 @@ typedef struct {
 
     // If true, Room payloads (backgrounds, views, gameObjects, tiles, layers) are parsed on demand via DataWin_loadRoomPayload during gameplay.
     bool lazyLoadRooms;
-    // If true, TXTR objects will be loaded on demand via DataWin_loadTxtrIfNeeded, and unloaded if memory is tight.
-    bool lazyLoadTextures;
 
     // When lazyLoadRooms is true, this list indicates which rooms should be loaded during load time instead of demand. They will also not be freed.
     StringBooleanEntry* eagerlyLoadedRooms;
@@ -912,7 +910,6 @@ struct DataWin {
     char* lazyLoadFilePath; // owned strdup of the original file path, for diagnostics
     size_t fileSize; // cached size of the DataWin, captured at parse time. Used for platforms where fseek(SEEK_END)+ftell is unreliable due to buffering (like the PlayStation 2).
     bool lazyLoadRooms; // mirrors the parser option so Runner can branch without re-reading options
-    bool lazyLoadTextures; // ditto
 };
 
 DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options);
@@ -932,4 +929,3 @@ bool DataWin_isVersionAtLeast(const DataWin* dw, uint32_t major, uint32_t minor,
 void DataWin_bumpVersionTo(DataWin* dw, uint32_t major, uint32_t minor, uint32_t release, uint32_t build);
 void GamePath_computeInternal(GamePath* path);
 PathPositionResult GamePath_getPosition(GamePath* path, float t);
-void DataWin_loadTxtrIfNeeded(DataWin* dw, uint32_t textureId);

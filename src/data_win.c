@@ -2000,7 +2000,7 @@ static void parseSTRG(BinaryReader* reader, DataWin* dw) {
     free(ptrs);
 }
 
-static void parseTXTR(BinaryReader* reader, DataWin* dw, size_t chunkEnd, bool loadTextureDataLazily) {
+static void parseTXTR(BinaryReader* reader, DataWin* dw, size_t chunkEnd) {
     Txtr* t = &dw->txtr;
 
     uint32_t count;
@@ -2076,61 +2076,9 @@ static void parseTXTR(BinaryReader* reader, DataWin* dw, size_t chunkEnd, bool l
     }
 
     // Load blob data into owned buffers
-    if (!loadTextureDataLazily) {
-        repeat(count, i) {
-            if (t->textures[i].blobOffset == 0 || t->textures[i].blobSize == 0) continue;
-            t->textures[i].blobData = BinaryReader_readBytesAt(reader, t->textures[i].blobOffset, t->textures[i].blobSize);
-        }
-    }
-}
-
-void DataWin_loadTxtrIfNeeded(DataWin* dw, uint32_t textureId) {
-    Txtr* t = &dw->txtr;
-    Texture* tex = &t->textures[textureId];
-
-    if (tex->blobOffset == 0 || tex->blobSize == 0) return;
-    if (tex->blobData != nullptr) return;
-
-    if (!dw->lazyLoadFile) {
-        fprintf(stderr, "%s: called without a lazy load file.\n", __func__);
-        return;
-    }
-
-    while (true) {
-        tex->blobData = malloc(tex->blobSize);
-
-        if (!tex->blobData) {
-            fprintf(stderr, "%s: failed to allocate texture data. trying to free a texture.\n", __func__);
-
-            // TODO: use an LRU cache instead
-            bool found = false;
-            for (uint32_t i = 0; i < t->count; i++) {
-                if (t->textures[i].blobData) {
-                    fprintf(stderr, "%s: evicting texture %u to free up memory\n", __func__, i);
-                    free(t->textures[i].blobData);
-                    t->textures[i].blobData = nullptr;
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                fprintf(stderr, "%s: no textures to free. sorry bucko!\n", __func__);
-            }
-        } else {
-            memset(tex->blobData, 0, tex->blobSize);
-            long old_seek = ftell(dw->lazyLoadFile);
-            fseek(dw->lazyLoadFile, tex->blobOffset, SEEK_SET);
-            size_t read = fread(tex->blobData, 1, tex->blobSize, dw->lazyLoadFile);
-            fseek(dw->lazyLoadFile, old_seek, SEEK_SET);
-
-            if (read != tex->blobSize) {
-                fprintf(stderr, "%s: couldn't read %u bytes to load a texture.\n", __func__, tex->blobSize);
-            }
-
-	        fprintf(stderr, "%s: loaded texture data for page %u\n", __func__, textureId);
-            break;
-        }
+    repeat(count, i) {
+        if (t->textures[i].blobOffset == 0 || t->textures[i].blobSize == 0) continue;
+        t->textures[i].blobData = BinaryReader_readBytesAt(reader, t->textures[i].blobOffset, t->textures[i].blobSize);
     }
 }
 
@@ -2299,15 +2247,13 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
         // Bulk-read the chunk data into memory for fast parsing
         uint8_t* chunkBuffer = nullptr;
         if (shouldParse && chunkLength > 0) {
-            chunkBuffer = malloc(chunkLength);
-            if (chunkBuffer) {
-                size_t read = fread(chunkBuffer, 1, chunkLength, reader.file);
-                if (read != chunkLength) {
-                    fprintf(stderr, "DataWin: short read on chunk %.4s (expected %u, got %zu)\n", chunkName, chunkLength, read);
-                    exit(1);
-                }
-                BinaryReader_setBuffer(&reader, chunkBuffer, chunkDataStart, chunkLength);
+            chunkBuffer = safeMalloc(chunkLength);
+            size_t read = fread(chunkBuffer, 1, chunkLength, reader.file);
+            if (read != chunkLength) {
+                fprintf(stderr, "DataWin: short read on chunk %.4s (expected %u, got %zu)\n", chunkName, chunkLength, read);
+                exit(1);
             }
+            BinaryReader_setBuffer(&reader, chunkBuffer, chunkDataStart, chunkLength);
         }
 
         if (options.parseGen8 && memcmp(chunkName, "GEN8", 4) == 0) {
@@ -2372,7 +2318,7 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
         } else if (options.parseStrg && memcmp(chunkName, "STRG", 4) == 0) {
             parseSTRG(&reader, dw);
         } else if (options.parseTxtr && memcmp(chunkName, "TXTR", 4) == 0) {
-            parseTXTR(&reader, dw, chunkEnd, options.lazyLoadTextures);
+            parseTXTR(&reader, dw, chunkEnd);
         } else if (options.parseAudo && memcmp(chunkName, "AUDO", 4) == 0) {
             parseAUDO(&reader, dw);
         } else {
@@ -2401,8 +2347,7 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
 
     // If lazy-loading rooms, keep the file handle open for DataWin_loadRoomPayload, otherwise close it now
     dw->lazyLoadRooms = options.lazyLoadRooms;
-    dw->lazyLoadTextures = options.lazyLoadTextures;
-    if (options.lazyLoadRooms || options.lazyLoadTextures) {
+    if (options.lazyLoadRooms) {
         dw->lazyLoadFile = file;
         dw->lazyLoadFilePath = safeStrdup(filePath);
         dw->fileSize = (size_t) fileSize;
@@ -2620,7 +2565,7 @@ void DataWin_free(DataWin* dw) {
     free(dw->strgBuffer);
     free(dw->bytecodeBuffer);
 
-    // Close the lazy-load file handle (only open when lazyLoadRooms/lazyLoadTextures was enabled)
+    // Close the lazy-load file handle (only open when lazyLoadRooms was enabled)
     if (dw->lazyLoadFile != nullptr) {
         fclose(dw->lazyLoadFile);
         dw->lazyLoadFile = nullptr;
