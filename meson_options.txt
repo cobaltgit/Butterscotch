@@ -1,0 +1,29 @@
+option('platform', type: 'combo', choices: ['desktop', 'ps3', 'web', 'web-meta', 'ps2'], value: 'desktop', description: 'Platform backend')
+option('desktop_backend', type: 'combo', choices: ['auto', 'glfw3', 'glfw2', 'sdl1'], value: 'auto', description: 'Desktop platform backend')
+option('audio_backend', type: 'combo', choices: ['auto', 'openal', 'miniaudio', 'web', 'none', 'ps2'], value: 'auto', description: 'Audio backend')
+
+# Build metadata
+option('commit_hash', type: 'string', value: 'unknown', description: 'Git commit hash')
+option('commit_date', type: 'string', value: 'unknown', description: 'Git commit date')
+
+# Features
+option('enable_wad14', type: 'boolean', value: true, description: 'Enable support for WAD Version 14 and below')
+option('enable_wad16', type: 'boolean', value: true, description: 'Enable support for WAD Version 15/16')
+option('enable_wad17', type: 'boolean', value: true, description: 'Enable support for WAD Version 17')
+
+# Graphics
+option('enable_legacy_gl', type: 'boolean', value: true, description: 'Enable the legacy OpenGL renderer')
+option('enable_modern_gl', type: 'boolean', value: true, description: 'Enable the modern OpenGL renderer')
+option('enable_gles', type: 'boolean', value: false, description: 'Build the gl_renderer against OpenGL ES 3.0 / WebGL2')
+
+# Debugging / Profiling (Auto will adapt based on the selected platform)
+option('enable_vm_gml_profiler', type: 'combo', choices: ['auto', 'true', 'false'], value: 'auto', description: 'Enable Butterscotch VM/interpreter profiler')
+option('enable_vm_tracing', type: 'combo', choices: ['auto', 'true', 'false'], value: 'auto', description: 'Enable Butterscotch VM/interpreter tracing checks')
+option('enable_vm_opcode_profiler', type: 'combo', choices: ['auto', 'true', 'false'], value: 'auto', description: 'Enable Butterscotch VM opcode count profiler')
+option('enable_spatial_grid_logs', type: 'combo', choices: ['auto', 'true', 'false'], value: 'auto', description: 'Enable Spatial Grid logs')
+option('enable_vm_stub_logs', type: 'combo', choices: ['auto', 'true', 'false'], value: 'auto', description: 'Enable VM unknown/stubbed function logs')
+
+# Platform specific configs
+option('enable_ps2_renderer_logs', type: 'boolean', value: false, description: 'Enable hot path logs in the PS2 renderer')
+option('enable_gprof_profiling', type: 'boolean', value: false, description: 'Enable gprof profiling for PS2')
+option('enable_asan', type: 'combo', choices: ['auto', 'true', 'false'], value: 'auto', description: 'Enable AddressSanitizer explicitly')

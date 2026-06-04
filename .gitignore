@@ -5,3 +5,5 @@ build_ps3/
 .cache
 CMakeUserPresets.json
 .devcontainer/
+/subprojects/*
+!/subprojects/*.wrap
