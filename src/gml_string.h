@@ -13,8 +13,7 @@ typedef struct {
 
 GMLString* GMLString_create(const char* str);
 void GMLString_incRef(GMLString* str);
-// Decrement refCount. If it reaches 0, free all inner RValues + row buffers + struct. Safe on nullptr.
+// Decrement refCount. If it reaches 0, free the string data and struct.
 void GMLString_decRef(GMLString* str);
-// Deep copy. Every inner owned-string is strdup'd. Nested arrays have their refCount bumped (shared by default).
-// New array starts at refCount=1, same shape as src, owner=newOwner.
+// Deep copy. Source string is strdup'd, refCount is set to 1.
 GMLString* GMLString_clone(GMLString* src);
