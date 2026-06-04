@@ -41,9 +41,17 @@ void GMLString_decRef(GMLString* str) {
 
 GMLString* GMLString_clone(GMLString* src) {
     if (!src) return NULL;
-    GMLString* dst = safeMalloc(sizeof(GMLString) + src->length + 1);
-    dst->refCount = 1;
+
+    GMLString* dst = safeMalloc(sizeof(GMLString));
+    if (!dst) return NULL;
+
     dst->data = strdup(src->data);
+    if (!dst->data) {
+        free(dst);
+        return NULL;
+    }
+
+    dst->refCount = 1;
     dst->length = src->length;
     return dst;
 }
