@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _BS_MATH_COMPAT_H_
+#define _BS_MATH_COMPAT_H_
 
 #include <math.h>
 #include "real_type.h"
@@ -108,3 +109,9 @@ static float roundf(float x) {
 #ifndef INFINITY
 #define INFINITY (1.0f / 0.0f)
 #endif
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#endif /* _BS_MATH_COMPAT_H_ */

@@ -203,7 +203,7 @@ static void executeCode(Runner* runner, Instance* instance, int32_t codeId) {
     // the nested execution overwrite the caller's stack slot values)
     RValue* savedStackValues = nullptr;
     if (savedStackTop > 0) {
-        savedStackValues = safeMalloc((uint32_t) savedStackTop * sizeof(RValue));
+        savedStackValues = (RValue *)safeMalloc((uint32_t) savedStackTop * sizeof(RValue));
         memcpy(savedStackValues, vm->stack.slots, (uint32_t) savedStackTop * sizeof(RValue));
     }
 
@@ -724,7 +724,8 @@ static void rebuildDrawableCacheIfDirty(Runner* runner) {
         int32_t instanceCount = (int32_t) arrlen(runner->instances);
         repeat(instanceCount, i) {
             Instance* inst = runner->instances[i];
-            Drawable d = {0};
+            Drawable d;
+            ZERO_STRUCT(d);
             d.type = DRAWABLE_INSTANCE;
             d.depth = inst->depth;
             d.instance = inst;
@@ -734,7 +735,8 @@ static void rebuildDrawableCacheIfDirty(Runner* runner) {
         if (!DataWin_isVersionAtLeast(runner->dataWin, 2, 0, 0, 0)) {
             repeat(room->tileCount, i) {
                 RoomTile* tile = &room->tiles[i];
-                Drawable d = {0};
+                Drawable d;
+                ZERO_STRUCT(d);
                 d.type = DRAWABLE_TILE;
                 d.depth = tile->tileDepth;
                 d.tileIndex = (int32_t) i;
@@ -744,7 +746,8 @@ static void rebuildDrawableCacheIfDirty(Runner* runner) {
             size_t runtimeLayersCount = arrlenu(runner->runtimeLayers);
             repeat(runtimeLayersCount, i) {
                 RuntimeLayer* runtimeLayer = &runner->runtimeLayers[i];
-                Drawable d = {0};
+                Drawable d;
+                ZERO_STRUCT(d);
                 d.type = DRAWABLE_LAYER;
                 d.depth = runtimeLayer->depth;
                 d.runtimeLayerId = (int32_t) runtimeLayer->id;
@@ -1490,7 +1493,7 @@ static void initRoom(Runner* runner, int32_t roomIndex) {
         RoomLayer* layerSource = &room->layers[i];
         if (layerSource->type == RoomLayerType_Background && layerSource->backgroundData != nullptr) {
             RoomLayerBackgroundData* src = layerSource->backgroundData;
-            RuntimeBackgroundElement* bg = safeMalloc(sizeof(RuntimeBackgroundElement));
+            RuntimeBackgroundElement* bg = (RuntimeBackgroundElement *)safeMalloc(sizeof(RuntimeBackgroundElement));
             bg->spriteIndex = src->spriteIndex;
             bg->visible = src->visible;
             bg->hTiled = src->hTiled;
@@ -1529,7 +1532,7 @@ static void initRoom(Runner* runner, int32_t roomIndex) {
         RuntimeLayer* runtimeLayer = &runner->runtimeLayers[i];
         repeat(assets->spriteCount, j) {
             SpriteInstance* src = &assets->sprites[j];
-            RuntimeSpriteElement* spriteElement = safeMalloc(sizeof(RuntimeSpriteElement));
+            RuntimeSpriteElement* spriteElement = (RuntimeSpriteElement *)safeMalloc(sizeof(RuntimeSpriteElement));
             spriteElement->name = src->name;
             spriteElement->spriteIndex = src->spriteIndex;
             spriteElement->x = src->x;
@@ -1942,17 +1945,17 @@ void Runner_reset(Runner* runner) {
     runner->currentRoomIndex = -1;
     runner->currentRoomOrderPosition = -1;
     runner->nextInstanceId = runner->dataWin->gen8.lastObj + 1;
-    runner->savedRoomStates = safeCalloc(runner->dataWin->room.count, sizeof(SavedRoomState));
+    runner->savedRoomStates = (SavedRoomState *)safeCalloc(runner->dataWin->room.count, sizeof(SavedRoomState));
     runner->nextLayerId = 1;
     runner->audioSystem->vtable->stopAll(runner->audioSystem);
 
     // Allocate the per-object instance list array once.
     // We don't need to reinitialize the list because the objt.count is fixed for this data.win.
     if (runner->instancesByObject == nullptr) {
-        runner->instancesByObject = safeCalloc(runner->dataWin->objt.count, sizeof(Instance**));
+        runner->instancesByObject = (Instance ***)safeCalloc(runner->dataWin->objt.count, sizeof(Instance**));
     }
     if (runner->instancesByExactObject == nullptr) {
-        runner->instancesByExactObject = safeCalloc(runner->dataWin->objt.count, sizeof(Instance**));
+        runner->instancesByExactObject = (Instance ***)safeCalloc(runner->dataWin->objt.count, sizeof(Instance**));
     }
 
     // Reset builtin function state
@@ -1983,7 +1986,7 @@ static int compareTargetObjectIndexAscending(const void *a, const void *b) {
 static void flattenCollisionEvents(Runner* runner) {
     DataWin* dataWin = runner->dataWin;
     int32_t count = (int32_t) dataWin->objt.count;
-    runner->flattenedCollisionEvents = safeCalloc((size_t) (count > 0 ? count : 1), sizeof(FlattenedCollisionEventList));
+    runner->flattenedCollisionEvents = (FlattenedCollisionEventList *)safeCalloc((size_t) (count > 0 ? count : 1), sizeof(FlattenedCollisionEventList));
     if (0 >= count) return;
 
     repeat(count, i) {
@@ -1992,7 +1995,7 @@ static void flattenCollisionEvents(Runner* runner) {
         FlattenedCollisionEventList* dst = &runner->flattenedCollisionEvents[i];
 
         if (src->eventCount > 0) {
-            dst->events = safeMalloc(src->eventCount * sizeof(FlattenedCollisionEvent));
+            dst->events = (FlattenedCollisionEvent *)safeMalloc(src->eventCount * sizeof(FlattenedCollisionEvent));
             repeat(src->eventCount, e) {
                 ObjectEvent* srcEvt = &src->events[e];
                 int32_t srcCodeId = (srcEvt->actionCount > 0) ? srcEvt->actions[0].codeId : -1;
@@ -2022,7 +2025,7 @@ static void flattenCollisionEvents(Runner* runner) {
 
                 int32_t ancCodeId = (ancEvt->actionCount > 0) ? ancEvt->actions[0].codeId : -1;
                 uint32_t newCount = dst->eventCount + 1;
-                dst->events = safeRealloc(dst->events, newCount * sizeof(FlattenedCollisionEvent));
+                dst->events = (FlattenedCollisionEvent *)safeRealloc(dst->events, newCount * sizeof(FlattenedCollisionEvent));
                 FlattenedCollisionEvent fce = {0};
                 fce.targetObjectIndex = target;
                 fce.codeId = ancCodeId;
@@ -2042,10 +2045,10 @@ static void flattenCollisionEvents(Runner* runner) {
 // Used by collision dispatch to skip non-collision objects in the outer loop, mirroring how the native obj_has_event table partitions instance iteration by event class.
 static void populateObjectsWithAnyEventOfType(Runner* runner) {
     int32_t objectCount = (int32_t) runner->dataWin->objt.count;
-    runner->objectsWithAnyEventOfType = safeCalloc(OBJT_EVENT_TYPE_COUNT, sizeof(int32_t*));
+    runner->objectsWithAnyEventOfType = (int32_t **)safeCalloc(OBJT_EVENT_TYPE_COUNT, sizeof(int32_t*));
     if (objectCount == 0) return;
 
-    uint8_t* seen = safeCalloc((size_t) objectCount, 1);
+    uint8_t* seen = (uint8_t *)safeCalloc((size_t) objectCount, 1);
 
     repeat(OBJT_EVENT_TYPE_COUNT, t) {
         int16_t* dense = runner->eventSlotMap.denseLookup[t];
@@ -2073,7 +2076,7 @@ static void populateObjectsWithAnyEventOfType(Runner* runner) {
 
 // Validates if all required renderer functions are not null
 static void validateRendererVtable(Renderer* renderer) {
-    RendererVtable* v = requireNotNull(renderer->vtable);
+    RendererVtable* v = (RendererVtable *)requireNotNull(renderer->vtable);
 
     #define requireNotNullFunction(fn) requireMessage(v->fn != nullptr, "Renderer " #fn " does not have a implementation!")
     requireNotNullFunction(init);
@@ -2146,7 +2149,7 @@ Runner* Runner_create(DataWin* dataWin, VMContext* vm, Renderer* renderer, FileS
     requireNotNull(audioSystem);
     validateRendererVtable(renderer);
 
-    Runner* runner = safeCalloc(1, sizeof(Runner));
+    Runner* runner = (Runner *)safeCalloc(1, sizeof(Runner));
     runner->dataWin = dataWin;
     runner->vmContext = vm;
     runner->renderer = renderer;
@@ -3697,7 +3700,7 @@ void Runner_step(Runner* runner) {
 #ifdef ENABLE_VM_TRACING
                 GameObject* object = &runner->dataWin->objt.objects[inst->objectIndex];
                 if (shgeti(runner->vmContext->alarmsToBeTraced, "*") != -1 || shgeti(runner->vmContext->alarmsToBeTraced, object->name) != -1) {
-                    fprintf(stderr, "VM: [%s] Ticking down Alarm[%d] (instanceId=%d), current tick is %d\n", object->name, alarmIdx, inst->instanceId, inst->alarm[alarmIdx]);
+                    fprintf(stderr, "VM: [%s] Ticking down Alarm[%d] (instanceId=%d), current tick is %d\n", object->name, (int)alarmIdx, inst->instanceId, inst->alarm[alarmIdx]);
                 }
 #endif
 
@@ -3708,7 +3711,7 @@ void Runner_step(Runner* runner) {
 
 #ifdef ENABLE_VM_TRACING
                     if (shgeti(runner->vmContext->alarmsToBeTraced, "*") != -1 || shgeti(runner->vmContext->alarmsToBeTraced, object->name) != -1) {
-                        fprintf(stderr, "VM: [%s] Firing Alarm[%d] (instanceId=%d)\n", object->name, alarmIdx, inst->instanceId);
+                        fprintf(stderr, "VM: [%s] Firing Alarm[%d] (instanceId=%d)\n", object->name, (int)alarmIdx, inst->instanceId);
                     }
 #endif
 
@@ -4054,7 +4057,7 @@ void Runner_dumpState(Runner* runner) {
         repeat(GML_ALARM_COUNT, alarmIdx) {
             if (inst->alarm[alarmIdx] >= 0) {
                 if (!hasAlarm) { printf("  Alarms:"); hasAlarm = true; }
-                printf(" [%d]=%d", alarmIdx, inst->alarm[alarmIdx]);
+                printf(" [%d]=%d", (int)alarmIdx, inst->alarm[alarmIdx]);
             }
         }
         if (hasAlarm) printf("\n");
@@ -4265,7 +4268,7 @@ char* Runner_dumpStateJson(Runner* runner) {
         repeat(GML_ALARM_COUNT, alarmIdx) {
             if (inst->alarm[alarmIdx] >= 0) {
                 char alarmKey[4];
-                snprintf(alarmKey, sizeof(alarmKey), "%d", alarmIdx);
+                snprintf(alarmKey, sizeof(alarmKey), "%d", (int)alarmIdx);
                 JsonWriter_propertyInt(&w, alarmKey, inst->alarm[alarmIdx]);
             }
         }

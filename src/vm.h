@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _BS_VM_H_
+#define _BS_VM_H_
 
 #include "common.h"
 #include <stdint.h>
@@ -335,7 +336,7 @@ static inline const char* VM_getCallerName(VMContext* ctx) {
 static inline char* VM_createDedupKey(const char* callerName, const char* funcName) {
     // Build dedup key: "callerName\tfuncName"
     size_t keyLen = strlen(callerName) + 1 + strlen(funcName) + 1;
-    char* dedupKey = safeMalloc(keyLen);
+    char* dedupKey = (char *)safeMalloc(keyLen);
     snprintf(dedupKey, keyLen, "%s\t%s", callerName, funcName);
     return dedupKey;
 }
@@ -368,13 +369,23 @@ static inline bool VM_shouldTraceVariable(StringBooleanEntry* traceMap, const ch
     // "hp" should trace EVERY "hp" variable read/write to ALL objects
     if (shgeti(traceMap, varName) != -1) return true;
     // "obj_mainchara.hp" should trace EVERY variable read/write to the "hp" variable on the "obj_mainchara" object.
-    char formatted[strlen(scopeName) + 1 + strlen(varName) + 1];
-    snprintf(formatted, sizeof(formatted), "%s.%s", scopeName, varName);
-    if (shgeti(traceMap, formatted) != -1) return true;
+    size_t formattedSize = strlen(scopeName) + 1 + strlen(varName) + 1;
+    char *formatted = (char *)safeMalloc(formattedSize);
+    snprintf(formatted, formattedSize, "%s.%s", scopeName, varName);
+    if (shgeti(traceMap, formatted) != -1) {
+        free(formatted);
+        return true;
+    }
+    free(formatted);
     if (altScopeName != nullptr) {
-        char altFormatted[strlen(altScopeName) + 1 + strlen(varName) + 1];
-        snprintf(altFormatted, sizeof(altFormatted), "%s.%s", altScopeName, varName);
-        if (shgeti(traceMap, altFormatted) != -1) return true;
+        size_t altFormattedSize = strlen(altScopeName) + 1 + strlen(varName) + 1;
+        char *altFormatted = (char *)safeMalloc(altFormattedSize);
+        snprintf(altFormatted, altFormattedSize, "%s.%s", altScopeName, varName);
+        if (shgeti(traceMap, altFormatted) != -1) {
+            free(altFormatted);
+            return true;
+        }
+        free(altFormatted);
     }
     return false;
 }
@@ -395,3 +406,5 @@ static inline void VM_checkIfVariableShouldBeTracedAndLog(VMContext* ctx, const 
     free(rvalueAsString);
 }
 #endif
+
+#endif /* _BS_VM_H_ */
