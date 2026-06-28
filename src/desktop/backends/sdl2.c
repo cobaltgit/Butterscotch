@@ -14,6 +14,24 @@ static SDL_Surface* scr;
 static SDL_Window *window;
 static SDL_GameController* openControllers[MAX_GAMEPADS];
 
+static const int SDL_TO_GML_BUTTON[SDL_CONTROLLER_BUTTON_MAX] = {
+    [SDL_CONTROLLER_BUTTON_A]             = 0,
+    [SDL_CONTROLLER_BUTTON_B]             = 1,
+    [SDL_CONTROLLER_BUTTON_X]             = 2,
+    [SDL_CONTROLLER_BUTTON_Y]             = 3,
+    [SDL_CONTROLLER_BUTTON_LEFTSHOULDER]  = 4,
+    [SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = 5,
+    [SDL_CONTROLLER_BUTTON_BACK]          = 8,
+    [SDL_CONTROLLER_BUTTON_START]         = 9,
+    [SDL_CONTROLLER_BUTTON_LEFTSTICK]     = 10,
+    [SDL_CONTROLLER_BUTTON_RIGHTSTICK]    = 11,
+    [SDL_CONTROLLER_BUTTON_DPAD_UP]       = 12,
+    [SDL_CONTROLLER_BUTTON_DPAD_DOWN]     = 13,
+    [SDL_CONTROLLER_BUTTON_DPAD_LEFT]     = 14,
+    [SDL_CONTROLLER_BUTTON_DPAD_RIGHT]    = 15,
+    [SDL_CONTROLLER_BUTTON_GUIDE]         = 16,
+};
+
 static SDL_Window *tryOpenWindow(int reqW, int reqH, const char* title, Uint32 flags) {
     if (gfx == SOFTWARE) {
         return SDL_CreateWindow(
@@ -404,49 +422,33 @@ enum {
 };
 
 static void mapSdl2ToGml(SDL_GameController* gc, GamepadSlot* slot) {
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_A)) slot->buttonDown[0] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_B)) slot->buttonDown[1] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_X)) slot->buttonDown[2] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_Y)) slot->buttonDown[3] = true;
+    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++) {
+        int gmlIdx = SDL_TO_GML_BUTTON[i];
 
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) slot->buttonDown[4] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) slot->buttonDown[5] = true;
+        if (gmlIdx == 0 && i != SDL_CONTROLLER_BUTTON_A) continue;
 
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_BACK)) slot->buttonDown[8] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_START)) slot->buttonDown[9] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_GUIDE)) slot->buttonDown[16] = true;
+        slot->buttonDown[gmlIdx] = SDL_GameControllerGetButton(gc, (SDL_GameControllerButton)i);
+        slot->buttonValue[gmlIdx] = slot->buttonDown[gmlIdx] ? 1.0f : 0.0f;
+    }
 
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_LEFTSTICK)) slot->buttonDown[10] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_RIGHTSTICK)) slot->buttonDown[11] = true;
+    const float invMaxAxis = 1.0f / 32767.0f;
 
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_UP)) slot->buttonDown[12] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) slot->buttonDown[13] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) slot->buttonDown[14] = true;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) slot->buttonDown[15] = true;
+    float lt = (float)SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERLEFT) * invMaxAxis;
+    float rt = (float)SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) * invMaxAxis;
 
-    float lt = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERLEFT) / 32767.0f;
-    float rt = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) / 32767.0f;
-    if (lt < 0.0f) lt = 0.0f;
-    if (rt < 0.0f) rt = 0.0f;
+    lt = fmaxf(lt, 0.0f);
+    rt = fmaxf(rt, 0.0f);
+
     slot->buttonValue[IDX_LT] = lt;
     slot->buttonValue[IDX_RT] = rt;
-    if (lt >= slot->triggerThreshold) slot->buttonDown[IDX_LT] = true;
-    if (rt >= slot->triggerThreshold) slot->buttonDown[IDX_RT] = true;
 
-    float lh = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f;
-    float lv = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f;
-    float rh = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f;
-    float rv = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f;
+    slot->buttonDown[IDX_LT] = (lt >= slot->triggerThreshold);
+    slot->buttonDown[IDX_RT] = (rt >= slot->triggerThreshold);
 
-    slot->axisValue[0] = lh;
-    slot->axisValue[1] = lv;
-    slot->axisValue[2] = rh;
-    slot->axisValue[3] = rv;
-
-    for (int i = 0; GP_BUTTON_COUNT > i; i++) {
-        if (i == IDX_LT || i == IDX_RT) continue;
-        slot->buttonValue[i] = slot->buttonDown[i] ? 1.0f : 0.0f;
-    }
+    slot->axisValue[0] = (float)SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX) * invMaxAxis;
+    slot->axisValue[1] = (float)SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY) * invMaxAxis;
+    slot->axisValue[2] = (float)SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTX) * invMaxAxis;
+    slot->axisValue[3] = (float)SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTY) * invMaxAxis;
 }
 
 bool platformHandleEvents(void) {
