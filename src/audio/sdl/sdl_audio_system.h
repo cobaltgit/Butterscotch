@@ -13,4 +13,4 @@ typedef struct {
     SDL_AudioSpec sdlSpec;  // what SDL actually opened (may differ from desired)
 } SdlAudioSystem;
 
-SdlAudioSystem* SdlAudioSystem_create(void);
+SdlAudioSystem* SdlAudioSystem_create(DataWin* dataWin);

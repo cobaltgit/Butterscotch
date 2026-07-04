@@ -16,7 +16,7 @@
 #define M_PI 3.1415926535897932384626
 #endif
 
-#define TEXTURE_LRU_LENGTH 16
+#define TEXTURE_LRU_LENGTH 64
 
 #define SURFACE_MAX_COUNT 64
 
@@ -224,8 +224,8 @@ FORCE_INLINE int swrCeiling(float x)
 
 static SWTexture* swrCreateTexture(const uint8_t* srcBuffer, int width, int height)
 {
-	SWTexture* txt = safeMalloc(sizeof(SWTexture));
-	txt->buffer = safeMalloc(width * height * sizeof(uintpixel_t));
+	SWTexture* txt = (SWTexture*) safeMalloc(sizeof(SWTexture));
+	txt->buffer = (uintpixel_t*) safeMalloc(width * height * sizeof(uintpixel_t));
 	
 	const uint32_t* rgbaSrc = (const uint32_t*) srcBuffer;
 
@@ -357,17 +357,17 @@ static void SWRenderer_init(Renderer* renderer, DataWin* dataWin)
 	swr->textureCount = dataWin->txtr.count;
 	swr->surfaceCount = SURFACE_MAX_COUNT;
 	swr->totalTextureCount = swr->textureCount + swr->surfaceCount;
-	swr->textures = safeCalloc(swr->totalTextureCount, sizeof(SWTexture*));
+	swr->textures = (SWTexture**) safeCalloc(swr->totalTextureCount, sizeof(SWTexture*));
 	
 	//allocate texture LRU cache to allow for dynamic unloading of textures
-	swr->textureIndexLRU = safeCalloc(TEXTURE_LRU_LENGTH, sizeof(uint32_t));
+	swr->textureIndexLRU = (uint32_t*) safeCalloc(TEXTURE_LRU_LENGTH, sizeof(uint32_t));
 	swr->textureIndexLRUHead = 0;
 	swr->textureIndexLRUTail = 0;
 	
 	//HACK: this isn't good, really.  This should seriously be refactored.
 	//expand datawin's tpag items list to include our surface count.
 	swr->originalTPagCount = dataWin->tpag.count;
-	dataWin->tpag.items = safeRealloc(dataWin->tpag.items, sizeof(TexturePageItem) * (dataWin->tpag.count + swr->surfaceCount));
+	dataWin->tpag.items = (TexturePageItem*) safeRealloc(dataWin->tpag.items, sizeof(TexturePageItem) * (dataWin->tpag.count + swr->surfaceCount));
 	dataWin->tpag.count += swr->surfaceCount;
 	
 	swr->originalSpriteCount = dataWin->sprt.count;
@@ -400,7 +400,7 @@ static void SWRenderer_beginFrame(Renderer* renderer, int32_t gameW, int32_t gam
 	{
 		//allocate frame buffer
 		free(swr->fb);
-		swr->fb = safeMalloc(windowW * windowH * sizeof(uintpixel_t));
+		swr->fb = (uintpixel_t*) safeMalloc(windowW * windowH * sizeof(uintpixel_t));
 		swr->fbPitch = windowW;
 		swr->width = windowW;
 		swr->height = windowH;
@@ -487,11 +487,21 @@ static void SWRenderer_endView(Renderer* renderer)
 }
 
 static void SWRenderer_beginGUI(Renderer* renderer, int32_t guiW, int32_t guiH,
-								int32_t portX, int32_t portY, int32_t portW, int32_t portH)
+								int32_t portX, int32_t portY, int32_t portW, int32_t portH, int32_t targetSurfaceId)
 {
 	(void)renderer; (void)guiW; (void)guiH;
 	(void)portX; (void)portY; (void)portW; (void)portH;
+	(void)targetSurfaceId;
 	UNIMP2();
+}
+
+static void SWRenderer_setGuiProjection(Renderer* renderer, int32_t guiW, int32_t guiH, int32_t portW, int32_t portH, bool renderingToUserSurface)
+{
+	(void) renderer;
+	(void) guiW; (void) guiH;
+	(void) portW; (void) portH;
+	(void) renderingToUserSurface;
+	UNIMP();
 }
 
 static void SWRenderer_endGUI(Renderer* renderer)
@@ -602,7 +612,7 @@ static void swrDrawHLineInt(Renderer* renderer, int dx, int dy, int dw, uintpixe
 	
 	if (dy < swr->portY) return;
 	if (dy >= swr->maxY) return;
-	if (dx < swr->portX) { dw += dx; dx = swr->portX; }
+	if (dx < swr->portX) { dw += dx - swr->portX; dx = swr->portX; }
 	if (dx + dw >= swr->maxX) dw = swr->maxX - dx;
 	if (dw <= 0) return;
 	
@@ -665,7 +675,7 @@ static void swrDrawVLineInt(Renderer* renderer, int dx, int dy, int dh, uintpixe
 	
 	if (dx < swr->portX) return;
 	if (dx >= swr->maxX) return;
-	if (dy < swr->portY) { dh += dy; dy = swr->portY; }
+	if (dy < swr->portY) { dh += dy - swr->portY; dy = swr->portY; }
 	if (dy + dh >= swr->maxY) dh = swr->maxY - dy;
 	if (dh <= 0) return;
 	
@@ -740,7 +750,7 @@ static void swrDrawRectangleColor(Renderer* renderer, float x1, float y1, float 
 	swrDrawVLine(renderer, x2, y1, (y2 - y1) + 1, color2, color4, alpha);
 }
 
-static void swrDrawLineInt(Renderer* renderer, int x1, int y1, int x2, int y2, int width, uintpixel_t color1, uintpixel_t color2, int alpha)
+static void swrDrawLineInt(Renderer* renderer, int x1, int y1, int x2, int y2, MAYBE_UNUSED int width, uintpixel_t color1, uintpixel_t color2, int alpha)
 {
 	if (x1 == x2)
 	{
@@ -1343,8 +1353,12 @@ static void SWRenderer_drawLine(Renderer* renderer, float x1, float y1, float x2
 	swrDrawLine(renderer, x1, y1, x2, y2, width, colorCvt, colorCvt, alpha);
 }
 
-static void swrDrawTriangleInternal(SWRenderer* swr, int xup, int yup, int xleft, int yleft, int xright, int yright, uint32_t color, int alpha)
+static void swrDrawTriangleInternal(SWRenderer* swr, int xup, int yup, int xleft, int yleft, int xright, int yright, uint32_t color1, uint32_t color2, uint32_t color3, int alpha)
 {
+	// TODO: update this
+	(void) color2;
+	(void) color3;
+	
 	// Figure out the maximum Y extent of the triangle.
 	// (Note that we know yup is the minimum.)
 	int xmid, ymid, xmid2 = xup, xmax, ymax;
@@ -1360,7 +1374,7 @@ static void swrDrawTriangleInternal(SWRenderer* swr, int xup, int yup, int xleft
 			xmid2 = xup + (xleft - xup) * (ymid - yup) / (yleft - yup);
 	}
 	
-	for (int y = yup; y <= ymax; y++)
+	for (int y = yup; y < ymax; y++)
 	{
 		if (y < 0) continue;
 		if (y >= swr->height) break;
@@ -1398,15 +1412,16 @@ static void swrDrawTriangleInternal(SWRenderer* swr, int xup, int yup, int xleft
 		if (x1 > x2) continue;
 		
 		uintpixel_t* line = &swr->fb[y * swr->width];
-		for (int x = x1; x <= x2; x++) {
-			alphaBlend(&line[x], color, alpha);
+		for (int x = x1; x < x2; x++) {
+			alphaBlend(&line[x], color1, alpha);
 		}
 	}
 }
 
-static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2, float x3, float y3, uint32_t color, float alpha)
+static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2, float x3, float y3, uint32_t color1, uint32_t color2, uint32_t color3, float alpha)
 {
 	float xup, yup, xleft, yleft, xright, yright;
+	uint32_t colorup, colorleft, colorright;
 	
 	SWRenderer* swr = (SWRenderer*) renderer;
 	swrTransformPosIfNeeded(swr, &x1, &y1);
@@ -1414,18 +1429,18 @@ static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, fl
 	swrTransformPosIfNeeded(swr, &x3, &y3);
 	
 	//which vertex is higher?
-	xup = x1, yup = y1;
-	xleft = x2, yleft = y2;
-	xright = x3, yright = y3;
+	xup = x1, yup = y1; colorup = color1;
+	xleft = x2, yleft = y2; colorleft = color2;
+	xright = x3, yright = y3; colorright = color3;
 	if (yup > y2) {
-		xup = x2, yup = y2;
-		xleft = x1, yleft = y1;
+		xup = x2, yup = y2, colorup = color2;
+		xleft = x1, yleft = y1, colorleft = color1;
 		//xright = x3, yright = y3;
 	}
 	if (yup > y3) {
-		xup = x3, yup = y3;
-		xleft = x1, yleft = y1;
-		xright = x2, yright = y2;
+		xup = x3, yup = y3, colorup = color3;
+		xleft = x1, yleft = y1, colorleft = color1;
+		xright = x2, yright = y2, colorright = color2;
 	}
 	
 	if (xleft > xright) {
@@ -1435,6 +1450,9 @@ static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, fl
 		tmp = yleft;
 		yleft = yright;
 		yright = tmp;
+		uint32_t tmp2 = colorleft;
+		colorleft = colorright;
+		colorright = tmp2;
 	}
 	
 	swrDrawTriangleInternal(
@@ -1442,29 +1460,35 @@ static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, fl
 		swrFloor(xup), swrFloor(yup),
 		swrFloor(xleft), swrCeiling(yleft),
 		swrFloor(xright), swrCeiling(yright),
-		swrConvertPixel(color),
+		swrConvertPixel(colorup),
+		swrConvertPixel(colorleft),
+		swrConvertPixel(colorright),
 		swrIntAlpha(alpha)
 	);
 }
 
-static void SWRenderer_drawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2,
-									float x3, float y3, bool outline)
+static void SWRenderer_drawTriangle(Renderer* renderer,
+                                    float x1, float y1, float x2, float y2, float x3, float y3,
+                                    uint32_t color1, uint32_t color2, uint32_t color3,
+                                    float alpha, bool outline)
 {
 	if (outline)
 	{
-		uintpixel_t drawColorCvt = swrConvertPixel(renderer->drawColor);
-		swrDrawLine(renderer, x1, y1, x2, y2, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
-		swrDrawLine(renderer, x1, y1, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
-		swrDrawLine(renderer, x2, y2, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+		uintpixel_t color1cvt = swrConvertPixel(color1);
+		uintpixel_t color2cvt = swrConvertPixel(color2);
+		uintpixel_t color3cvt = swrConvertPixel(color3);
+		swrDrawLine(renderer, x1, y1, x2, y2, 1, color1cvt, color2cvt, renderer->drawAlpha);
+		swrDrawLine(renderer, x1, y1, x3, y3, 1, color1cvt, color3cvt, renderer->drawAlpha);
+		swrDrawLine(renderer, x2, y2, x3, y3, 1, color3cvt, color3cvt, renderer->drawAlpha);
 	}
 	else
 	{
-		swrDrawTriangle(renderer, x1, y1, x2, y2, x3, y3, renderer->drawColor, renderer->drawAlpha);
+		swrDrawTriangle(renderer, x1, y1, x2, y2, x3, y3, color1, color2, color3, alpha);
 	}
 }
 
 static void SWRenderer_drawLineColor(Renderer* renderer, float x1, float y1, float x2, float y2,
-									 float width, uint32_t color1, uint32_t color2, float alpha)
+                                     float width, uint32_t color1, uint32_t color2, float alpha)
 {
 	swrDrawLine(renderer, x1, y1, x2, y2, width, swrConvertPixel(color1), swrConvertPixel(color2), alpha);
 }
@@ -1558,13 +1582,15 @@ static void swrDrawText(SWRenderer* swr, const char* text, float x, float y, flo
 {
 	Renderer* renderer = &swr->base;
 	DataWin* dwin = renderer->dataWin;
-
+	
 	int32_t fontIndex = renderer->drawFont;
 	if (0 > fontIndex || dwin->font.count <= (uint32_t) fontIndex) return;
 
 	Font* font = &dwin->font.fonts[fontIndex];
 	
 	SwrFontState fontState;
+	memset(&fontState, 0, sizeof fontState); // silence warning treated as error
+	
 	if (!swrResolveFontState(swr, dwin, font, &fontState)) return;
 	
 	// TODO: do we need to mirror the way the text scrolls too?!
@@ -1643,15 +1669,19 @@ static void swrDrawText(SWRenderer* swr, const char* text, float x, float y, flo
 						
 						// TODO: at 640x480, for some reason, without this fixup the
 						// letters in the "Name the fallen human." screen don't shake
-						dx = round(dx * 2) / 2;
-						dy = round(dy * 2) / 2;
+						dx = roundf(dx * 2) / 2;
+						dy = roundf(dy * 2) / 2;
 						
 						SWTexture* texture = swr->textures[pageId];
 						
 						if (UNLIKELY(mustRotate))
 						{
+							dx -= x;
+							dy -= y;
 							float ndx = cosA * dx - sinA * dy;
 							float ndy = sinA * dx + cosA * dy;
+							ndx += x;
+							ndy += y;
 							swrDrawSpriteRotated(renderer, ndx, ndy, dw, dh, texture, sx, sy, sw, sh, color, alpha, angleDeg, 0.0f, 0.0f);
 						}
 						else
@@ -1692,7 +1722,7 @@ static void SWRenderer_drawText(Renderer* renderer, const char* text, float x, f
 
 static void SWRenderer_drawTextColor(Renderer* renderer, const char* text, float x, float y,
 									 float xscale, float yscale, float angleDeg,
-									 int32_t c1, int32_t c2, int32_t c3, int32_t c4, float alpha,
+									 int32_t c1, int32_t c2, int32_t c3, int32_t c4, MAYBE_UNUSED float alpha,
 									 float lineSeparation)
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
@@ -1705,10 +1735,10 @@ static void SWRenderer_drawTextColor(Renderer* renderer, const char* text, float
 	swrDrawText(swr, text, x, y, xscale, yscale, angleDeg, c1, renderer->drawAlpha, lineSeparation);
 }
 
-static void SWRenderer_drawTiled(Renderer* renderer, int32_t tpagIndex,
-								 float originX, float originY, float x, float y,
-								 float xscale, float yscale, bool tileX, bool tileY,
-								 float roomW, float roomH, uint32_t color, float alpha)
+static void SWRenderer_drawSpriteTiled(Renderer* renderer, int32_t tpagIndex,
+									   float originX, float originY, float x, float y,
+									   float xscale, float yscale, bool tileX, bool tileY,
+									   float roomW, float roomH, uint32_t color, float alpha)
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
 	DataWin* dwin = renderer->dataWin;
@@ -1775,6 +1805,18 @@ static void SWRenderer_drawTiled(Renderer* renderer, int32_t tpagIndex,
 	}
 }
 
+static void SWRenderer_drawSurfaceTiled(Renderer* renderer, int32_t surfaceID, float x, float y, float xscale, float yscale, float roomW, float roomH, uint32_t color, float alpha)
+{
+	(void) renderer;
+	(void) surfaceID;
+	(void) x; (void) y;
+	(void) xscale; (void) yscale;
+	(void) roomW; (void) roomH;
+	(void) color; (void) alpha;
+	
+	UNIMP2();
+}
+
 static void SWRenderer_flush(Renderer* renderer)
 {
 	(void)renderer;
@@ -1793,10 +1835,10 @@ static void SWRenderer_gpuSetBlendMode(Renderer* renderer, int32_t mode)
 	(void)renderer; (void)mode;
 }
 
-static void SWRenderer_gpuSetBlendModeExt(Renderer* renderer, int32_t sfactor, int32_t dfactor)
+static void SWRenderer_gpuSetBlendModeExt(Renderer* renderer, int32_t sfactor, int32_t dfactor, int32_t sfactor_alpha, int32_t dfactor_alpha)
 {
 	UNIMP();
-	(void)renderer; (void)sfactor; (void)dfactor;
+	(void)renderer; (void)sfactor; (void)dfactor; (void)sfactor_alpha; (void)dfactor_alpha;
 }
 
 static void SWRenderer_gpuSetBlendEnable(Renderer* renderer, bool enable)
@@ -1860,10 +1902,11 @@ static bool SWRenderer_surfaceExists(Renderer* renderer, int32_t surfaceID)
 	return false;
 }
 
-static bool SWRenderer_setRenderTarget(Renderer* renderer, int32_t surfaceID)
+static bool SWRenderer_setRenderTarget(Renderer* renderer, int32_t surfaceID, bool implicitApplicationSurface)
 {
 	UNIMP();
 	(void)renderer; (void)surfaceID;
+	(void)implicitApplicationSurface;
 	return false;
 }
 
@@ -2026,7 +2069,7 @@ static int32_t SWRenderer_createSpriteFromSurface(Renderer* renderer, int32_t su
 	sprite->originX = xorig;
 	sprite->originY = yorig;
 	sprite->textureCount = 1;
-	sprite->tpagIndices = safeMalloc(sizeof(int32_t));
+	sprite->tpagIndices = (int32_t*) safeMalloc(sizeof(int32_t));
 	sprite->tpagIndices[0] = (int32_t) tpagIndex;
 	sprite->maskCount = 0;
 	sprite->masks = nullptr;
@@ -2097,55 +2140,7 @@ static int32_t SWRenderer_ensureApplicationSurface(Renderer* renderer, int32_t w
 	return -1;
 }
 
-static RendererVtable swrVtable =
-{
-	.init                     = SWRenderer_init,
-	.destroy                  = SWRenderer_destroy,
-	.beginFrame               = SWRenderer_beginFrame,
-	.endFrameInit             = SWRenderer_endFrameInit,
-	.endFrameEnd              = SWRenderer_endFrameEnd,
-	.beginView                = SWRenderer_beginView,
-	.endView                  = SWRenderer_endView,
-	.beginGUI                 = SWRenderer_beginGUI,
-	.endGUI                   = SWRenderer_endGUI,
-	.drawSprite               = SWRenderer_drawSprite,
-	.drawSpritePart           = SWRenderer_drawSpritePart,
-	.drawSpritePos            = SWRenderer_drawSpritePos,
-	.drawRectangle            = SWRenderer_drawRectangle,
-	.drawRectangleColor       = SWRenderer_drawRectangleColor,
-	.drawLine                 = SWRenderer_drawLine,
-	.drawTriangle             = SWRenderer_drawTriangle,
-	.drawLineColor            = SWRenderer_drawLineColor,
-	.drawText                 = SWRenderer_drawText,
-	.drawTextColor            = SWRenderer_drawTextColor,
-	.flush                    = SWRenderer_flush,
-	.clearScreen              = SWRenderer_clearScreen,
-	.createSpriteFromSurface  = SWRenderer_createSpriteFromSurface,
-	.deleteSprite             = SWRenderer_deleteSprite,
-	.gpuSetBlendMode          = SWRenderer_gpuSetBlendMode,
-	.gpuSetBlendModeExt       = SWRenderer_gpuSetBlendModeExt,
-	.gpuSetBlendEnable        = SWRenderer_gpuSetBlendEnable,
-	.gpuSetAlphaTestEnable    = SWRenderer_gpuSetAlphaTestEnable,
-	.gpuSetAlphaTestRef       = SWRenderer_gpuSetAlphaTestRef,
-	.gpuSetColorWriteEnable   = SWRenderer_gpuSetColorWriteEnable,
-	.gpuGetColorWriteEnable   = SWRenderer_gpuGetColorWriteEnable,
-	.gpuGetBlendEnable        = SWRenderer_gpuGetBlendEnable,
-	.gpuSetFog                = SWRenderer_gpuSetFog,
-	.drawTile                 = NULL,
-	.drawTiled                = SWRenderer_drawTiled,
-	.createSurface            = SWRenderer_createSurface,
-	.surfaceExists            = SWRenderer_surfaceExists,
-	.setRenderTarget          = SWRenderer_setRenderTarget,
-	.ensureApplicationSurface = SWRenderer_ensureApplicationSurface,
-	.getSurfaceWidth          = SWRenderer_getSurfaceWidth,
-	.getSurfaceHeight         = SWRenderer_getSurfaceHeight,
-	.drawSurface              = SWRenderer_drawSurface,
-	.surfaceResize            = SWRenderer_surfaceResize,
-	.surfaceFree              = SWRenderer_surfaceFree,
-	.surfaceCopy              = SWRenderer_surfaceCopy,
-	.surfaceGetPixels         = SWRenderer_surfaceGetPixels,
-	.drawTiledPart            = SWRenderer_drawTiledPart,
-};
+static RendererVtable swrVtable;
 
 void SWRenderer_clearFrameBuffer(Renderer* renderer, uint32_t color)
 {
@@ -2161,10 +2156,185 @@ void SWRenderer_clearFrameBuffer(Renderer* renderer, uint32_t color)
 	}
 }
 
+static uint32_t SWRenderer_spriteGetTexture(Renderer* renderer, int32_t tpagIndex)
+{
+	(void) renderer;
+
+	return (uint32_t) tpagIndex + 1;
+}
+
+static uint32_t SWRenderer_surfaceGetTexture(Renderer* renderer, int32_t surfaceID)
+{
+	(void) renderer;
+	(void) surfaceID;
+
+	return (uint32_t) -1;
+}
+
+static float SWRenderer_textureGetTexelWidth(Renderer* renderer, uint32_t texID)
+{
+	(void) renderer;
+	(void) texID;
+	
+	return 1.0f;
+}
+
+static float SWRenderer_textureGetTexelHeight(Renderer* renderer, uint32_t texID)
+{
+	(void) renderer;
+	(void) texID;
+	
+	return 1.0f;
+}
+
+static bool SWRenderer_textureGetUVs(Renderer* renderer, uint32_t texID, float* outUVs)
+{
+	(void) renderer;
+	(void) texID;
+	(void) outUVs;
+	
+	return false;
+}
+
+static void SWRenderer_textureSetStage(Renderer* renderer, int32_t slot, uint32_t texID)
+{
+	(void) renderer;
+	(void) slot;
+	(void) texID;
+}
+
+static bool SWRenderer_shaderIsCompiled(Renderer* renderer, int32_t shader)
+{
+	(void) renderer;
+	(void) shader;
+	
+	return false;
+}
+
+static bool SWRenderer_shadersSupported(void)
+{
+	return false;
+}
+
+static void SWRenderer_gpuSetShader(Renderer* renderer, int32_t shaderIndex)
+{
+	(void) renderer;
+	(void) shaderIndex;
+}
+
+static void SWRenderer_gpuResetShader(Renderer* renderer)
+{
+	(void) renderer;
+}
+
+static int32_t SWRenderer_shaderGetUniform(Renderer* renderer, int32_t shaderIndex, char* uniform)
+{
+	(void) renderer;
+	(void) shaderIndex;
+	(void) uniform;
+	
+	return 0;
+}
+
+static int32_t SWRenderer_shaderGetSamplerIndex(Renderer* renderer, int32_t shaderIndex, char* uniform)
+{
+	(void) renderer;
+	(void) shaderIndex;
+	(void) uniform;
+	
+	return 0;
+}
+
+static void SWRenderer_shaderSetUniformF(Renderer* renderer, int32_t handle, int32_t count, float value1, float value2, float value3, float value4)
+{
+	(void) renderer;
+	(void) handle;
+	(void) count;
+	(void) value1;
+	(void) value2;
+	(void) value3;
+	(void) value4;
+}
+
+static void SWRenderer_shaderSetUniformI(Renderer* renderer, int32_t handle, int32_t count, int32_t value1, int32_t value2, int32_t value3, int32_t value4)
+{
+	(void) renderer;
+	(void) handle;
+	(void) count;
+	(void) value1;
+	(void) value2;
+	(void) value3;
+	(void) value4;
+}
+
 Renderer* SWRenderer_create(void)
 {
-	SWRenderer* swr = safeCalloc(1, sizeof(SWRenderer));
+	SWRenderer* swr = (SWRenderer*) safeCalloc(1, sizeof(SWRenderer));
 	swr->base.vtable = &swrVtable;
+	swrVtable.init                     = SWRenderer_init;
+	swrVtable.destroy                  = SWRenderer_destroy;
+	swrVtable.beginFrame               = SWRenderer_beginFrame;
+	swrVtable.endFrameInit             = SWRenderer_endFrameInit;
+	swrVtable.endFrameEnd              = SWRenderer_endFrameEnd;
+	swrVtable.beginView                = SWRenderer_beginView;
+	swrVtable.endView                  = SWRenderer_endView;
+	swrVtable.beginGUI                 = SWRenderer_beginGUI;
+	swrVtable.setGuiProjection         = SWRenderer_setGuiProjection;
+	swrVtable.endGUI                   = SWRenderer_endGUI;
+	swrVtable.drawSprite               = SWRenderer_drawSprite;
+	swrVtable.drawSpritePart           = SWRenderer_drawSpritePart;
+	swrVtable.drawSpritePos            = SWRenderer_drawSpritePos;
+	swrVtable.drawRectangle            = SWRenderer_drawRectangle;
+	swrVtable.drawRectangleColor       = SWRenderer_drawRectangleColor;
+	swrVtable.drawLine                 = SWRenderer_drawLine;
+	swrVtable.drawTriangle             = SWRenderer_drawTriangle;
+	swrVtable.drawLineColor            = SWRenderer_drawLineColor;
+	swrVtable.drawText                 = SWRenderer_drawText;
+	swrVtable.drawTextColor            = SWRenderer_drawTextColor;
+	swrVtable.flush                    = SWRenderer_flush;
+	swrVtable.clearScreen              = SWRenderer_clearScreen;
+	swrVtable.createSpriteFromSurface  = SWRenderer_createSpriteFromSurface;
+	swrVtable.deleteSprite             = SWRenderer_deleteSprite;
+	swrVtable.gpuSetBlendMode          = SWRenderer_gpuSetBlendMode;
+	swrVtable.gpuSetBlendModeExt       = SWRenderer_gpuSetBlendModeExt;
+	swrVtable.gpuSetBlendEnable        = SWRenderer_gpuSetBlendEnable;
+	swrVtable.gpuSetAlphaTestEnable    = SWRenderer_gpuSetAlphaTestEnable;
+	swrVtable.gpuSetAlphaTestRef       = SWRenderer_gpuSetAlphaTestRef;
+	swrVtable.gpuSetColorWriteEnable   = SWRenderer_gpuSetColorWriteEnable;
+	swrVtable.gpuGetColorWriteEnable   = SWRenderer_gpuGetColorWriteEnable;
+	swrVtable.gpuGetBlendEnable        = SWRenderer_gpuGetBlendEnable;
+	swrVtable.gpuSetFog                = SWRenderer_gpuSetFog;
+	swrVtable.drawSpriteTiled          = SWRenderer_drawSpriteTiled;
+	swrVtable.drawSurfaceTiled         = SWRenderer_drawSurfaceTiled;
+	swrVtable.createSurface            = SWRenderer_createSurface;
+	swrVtable.surfaceExists            = SWRenderer_surfaceExists;
+	swrVtable.setRenderTarget          = SWRenderer_setRenderTarget;
+	swrVtable.ensureApplicationSurface = SWRenderer_ensureApplicationSurface;
+	swrVtable.getSurfaceWidth          = SWRenderer_getSurfaceWidth;
+	swrVtable.getSurfaceHeight         = SWRenderer_getSurfaceHeight;
+	swrVtable.drawSurface              = SWRenderer_drawSurface;
+	swrVtable.surfaceResize            = SWRenderer_surfaceResize;
+	swrVtable.surfaceFree              = SWRenderer_surfaceFree;
+	swrVtable.surfaceCopy              = SWRenderer_surfaceCopy;
+	swrVtable.surfaceGetPixels         = SWRenderer_surfaceGetPixels;
+	swrVtable.drawTiledPart            = SWRenderer_drawTiledPart;
+	swrVtable.spriteGetTexture         = SWRenderer_spriteGetTexture;
+	swrVtable.surfaceGetTexture        = SWRenderer_surfaceGetTexture;
+	swrVtable.textureGetTexelWidth     = SWRenderer_textureGetTexelWidth;
+	swrVtable.textureGetTexelHeight    = SWRenderer_textureGetTexelHeight;
+	swrVtable.textureGetUVs            = SWRenderer_textureGetUVs;
+	swrVtable.textureSetStage          = SWRenderer_textureSetStage;
+	swrVtable.gpuSetShader             = SWRenderer_gpuSetShader;
+	swrVtable.gpuResetShader           = SWRenderer_gpuResetShader;
+	swrVtable.shaderGetUniform         = SWRenderer_shaderGetUniform;
+	swrVtable.shaderGetSamplerIndex    = SWRenderer_shaderGetSamplerIndex;
+	swrVtable.shaderSetUniformF        = SWRenderer_shaderSetUniformF;
+	swrVtable.shaderSetUniformI        = SWRenderer_shaderSetUniformI;
+	swrVtable.shaderIsCompiled         = SWRenderer_shaderIsCompiled;
+	swrVtable.shadersSupported         = SWRenderer_shadersSupported;
+	
+	swrVtable.drawTile                 = NULL;
+	
 	swr->base.drawColor = 0xFFFFFF;
 	swr->base.drawAlpha = 1.0f;
 	swr->base.drawFont = -1;

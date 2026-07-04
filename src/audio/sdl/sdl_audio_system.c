@@ -119,7 +119,7 @@ static void sdlDestroy(AudioSystem* audio) {
 // then patch the two functions that need SDL-aware behaviour.
 static AudioSystemVtable sdlAudioSystemVtable;
 
-SdlAudioSystem* SdlAudioSystem_create(void) {
+SdlAudioSystem* SdlAudioSystem_create(DataWin* dataWin) {
     SdlAudioSystem* sa = safeCalloc(1, sizeof(SdlAudioSystem));
 
     sdlAudioSystemVtable         = maAudioSystemVtable; // inherit everything
@@ -127,5 +127,6 @@ SdlAudioSystem* SdlAudioSystem_create(void) {
     sdlAudioSystemVtable.destroy = sdlDestroy;          // override: SDL_CloseAudio first
 
     sa->ma.base.vtable = &sdlAudioSystemVtable;
+    sa->ma.base.dw = dataWin;
     return sa;
 }

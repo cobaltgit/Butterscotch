@@ -7,8 +7,8 @@
 // 32-bit: 0xAARRGGBB
 // 16-bit: 0b0RRRRRGGGGGBBBBB
 // 8-bit:  0bBBGGGRRR
-#define PIXEL_SIZE 32
-//#define PIXEL_SIZE 16
+//#define PIXEL_SIZE 32
+#define PIXEL_SIZE 16
 //#define PIXEL_SIZE 8
 
 #if defined(__GNUC__) && (__GNUC__ >= 3 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 96))
