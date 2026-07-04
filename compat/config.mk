@@ -1,0 +1,10 @@
+OBJ_EXT := o
+_CC := $(CC)
+CFLAGS := -O2 -DNDEBUG
+INCLUDE := -I
+DEFINE := -D
+COMPILE_OBJ := -c
+OUTPUT_OBJ := -o
+OUTPUT_EXE := -o
+LIBS += -lrt
+LIBS += -ldl

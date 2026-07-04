@@ -1,0 +1,81 @@
+checking the C compiler CLI syntax:
+/opt/a30/lib/gcc/arm-a30-linux-gnueabihf/13.2.0/../../../../arm-a30-linux-gnueabihf/bin/ld: cannot find /nologo: No such file or directory
+/opt/a30/lib/gcc/arm-a30-linux-gnueabihf/13.2.0/../../../../arm-a30-linux-gnueabihf/bin/ld: cannot find /Fe:tmp/a.out: No such file or directory
+collect2: error: ld returned 1 exit status
+result: gcc
+checking if we are cross compiling:
+result: yes
+checking the target OS:
+checking if _WIN32 is defined:
+cmd: arm-linux-gcc  tmp/test.c -c -otmp/a.out 
+tmp/test.c:2:2: error: #error not defined
+    2 | #error not defined
+      |  ^~~~~
+result: no
+checking if __APPLE__ is defined:
+cmd: arm-linux-gcc  tmp/test.c -c -otmp/a.out 
+tmp/test.c:2:2: error: #error not defined
+    2 | #error not defined
+      |  ^~~~~
+result: no
+result: unix
+checking if the compiler supports -fno-builtin:
+cmd: arm-linux-gcc  tmp/test.c -c -otmp/a.out -fno-builtin
+result: yes
+checking if the compiler supports -MMD -MP -MF test.d:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -c -otmp/a.out -MMD -MP -MF tmp/test.d
+result: yes
+checking for librt:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lrt
+result: yes
+checking for libdl:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -ldl
+result: yes
+checking if stdbool.h works:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -c -otmp/a.out 
+result: yes
+checking if stdint.h works:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -c -otmp/a.out 
+result: yes
+checking if __func__ works:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out 
+result: yes
+checking for fmin:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for fmax:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for round:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for log2:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for lround:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for sqrtf:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for fabsf:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for fmodf:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for sinf:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for cosf:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for roundf:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out -lm
+result: yes
+checking for strtok_r:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out 
+result: yes
+checking for getopt_long:
+cmd: arm-linux-gcc -fno-builtin tmp/test.c -otmp/a.out 
+result: yes
