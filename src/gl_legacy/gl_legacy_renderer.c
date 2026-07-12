@@ -331,7 +331,7 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
         fprintf(stderr, "GL: Failed to decode TXTR page %u\n", pageId);
         return false;
     }
-    free(txtr->blobData);
+    if (dw->mmapBase == nullptr) free(txtr->blobData);
     txtr->blobData = nullptr;
 
     gl->textureWidths[pageId] = w;
