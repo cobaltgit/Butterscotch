@@ -935,6 +935,15 @@ struct DataWin {
     size_t fileSize; // cached size of the DataWin, captured at parse time. Used for platforms where fseek(SEEK_END)+ftell is unreliable due to buffering (like the PlayStation 2).
     bool lazyLoadRooms; // mirrors the parser option so Runner can branch without re-reading options
     bool lazyLoadTextures; // ditto, but with TXTR pages
+
+    // Non-null on platforms where DataWin_parse successfully mmap'd the whole data.win file
+    // (never attempted on PLATFORM_PS2, and may also be null elsewhere if mmap() failed and
+    // the code fell back to the normal heap-copy path). When non-null, strgBuffer,
+    // bytecodeBuffer, Texture.blobData, and AudioEntry.data are direct pointers into this
+    // mapping rather than owned allocations, and must NOT be individually freed -- DataWin_free
+    // munmaps this region once instead.
+    void* mmapBase;
+    size_t mmapSize;
 };
 
 DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options);

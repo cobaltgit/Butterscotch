@@ -10,6 +10,13 @@
 #include "stb_ds.h"
 #include "utils.h"
 
+// mmap
+#ifndef PLATFORM_PS2
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 // ===[ HELPERS ]===
 
 // Reads a uint32 absolute file offset, resolves it into the pre-loaded STRG buffer,
@@ -19,6 +26,27 @@ static const char* readStringPtr(BinaryReader* reader, DataWin* dw) {
     if (offset == 0) return nullptr;
     return (const char*) (dw->strgBuffer + (offset - dw->strgBufferBase));
 }
+
+// ===[ MMAP HELPERS (not built on PLATFORM_PS2) ]===
+
+#ifndef PLATFORM_PS2
+
+static void* mapWholeFile(FILE* file, size_t fileSize) {
+    int fd = fileno(file);
+    if (fd < 0) return nullptr;
+    void* base = mmap(nullptr, fileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (base == MAP_FAILED) return nullptr;
+    return base;
+}
+
+static uint8_t* mmapSlice(DataWin* dw, size_t offset, size_t length) {
+    if (length == 0) return nullptr;
+    requireMessage(dw->mmapBase != nullptr, "mmapSlice called without an active mapping");
+    requireMessage(offset + length <= dw->mmapSize, "mmapSlice range exceeds mapped file size");
+    return (uint8_t*) dw->mmapBase + offset;
+}
+
+#endif
 
 // Reads a pointer list header: count + absolute-offset pointers.
 // Caller must free the returned array.
@@ -2208,6 +2236,12 @@ static void parseCODE(BinaryReader* reader, DataWin* dw, uint32_t chunkLength, s
     if (oldFormat) {
         // BC<=14: bytecode is intermixed with entry headers. Capture the whole chunk as the bytecode buffer so that the per-entry bytecodeAbsoluteOffset values resolve correctly into it.
         dw->bytecodeBufferBase = chunkDataStart;
+#ifndef PLATFORM_PS2
+        if (dw->mmapBase != nullptr) {
+            dw->bytecodeBuffer = mmapSlice(dw, chunkDataStart, chunkLength);
+            return;
+        }
+#endif
         dw->bytecodeBuffer = BinaryReader_readBytesAt(reader, chunkDataStart, chunkLength);
         return;
     }
@@ -2226,6 +2260,12 @@ static void parseCODE(BinaryReader* reader, DataWin* dw, uint32_t chunkLength, s
     size_t blobSize = chunkEnd - blobStart;
 
     dw->bytecodeBufferBase = blobStart;
+#ifndef PLATFORM_PS2
+    if (dw->mmapBase != nullptr) {
+        dw->bytecodeBuffer = mmapSlice(dw, blobStart, blobSize);
+        return;
+    }
+#endif
     dw->bytecodeBuffer = BinaryReader_readBytesAt(reader, blobStart, blobSize);
 }
 
@@ -2462,7 +2502,18 @@ static void parseTXTR(BinaryReader* reader, DataWin* dw, size_t chunkEnd, bool l
         }
     }
 
-    // Load blob data into owned buffers
+    // Load blob data into owned buffers (or, when mmap is active, zero-copy slices --
+    // in that case we ignore loadTextureDataLazily entirely since a slice costs nothing
+    // up front; DataWin_loadTxtrIfNeeded becomes a no-op for these).
+#ifndef PLATFORM_PS2
+    if (dw->mmapBase != nullptr) {
+        repeat(count, i) {
+            if (t->textures[i].blobOffset == 0 || t->textures[i].blobSize == 0) continue;
+            t->textures[i].blobData = mmapSlice(dw, t->textures[i].blobOffset, t->textures[i].blobSize);
+        }
+        return;
+    }
+#endif
     if (!loadTextureDataLazily) {
         repeat(count, i) {
             if (t->textures[i].blobOffset == 0 || t->textures[i].blobSize == 0) continue;
@@ -2477,6 +2528,15 @@ void DataWin_loadTxtrIfNeeded(DataWin* dw, uint32_t textureId) {
 
     if (tex->blobOffset == 0 || tex->blobSize == 0) return;
     if (tex->blobData != nullptr) return;
+
+#ifndef PLATFORM_PS2
+    if (dw->mmapBase != nullptr) {
+        // parseTXTR already assigns blobData as a mmap slice unconditionally when mmap is
+        // active, so we should never actually get here -- this is just a safety net.
+        tex->blobData = mmapSlice(dw, tex->blobOffset, tex->blobSize);
+        return;
+    }
+#endif
 
     if (!dw->lazyLoadFile) {
         fprintf(stderr, "loadTxtrIfNeeded: called without a lazy load file.\n");
@@ -2512,10 +2572,18 @@ static void parseAUDO(BinaryReader* reader, DataWin* dw) {
         a->entries[i].present = true;
         a->entries[i].dataSize = BinaryReader_readUint32(reader);
         a->entries[i].dataOffset = (uint32_t)BinaryReader_getPosition(reader);
-        // Load audio data into owned buffer
+        // Load audio data into an owned buffer (or, when mmap is active, a zero-copy slice --
+        // there's no lazy-loading option for AUDO today, so this is a straightforward win).
         if (a->entries[i].dataSize > 0) {
-            a->entries[i].data = (uint8_t *)safeMalloc(a->entries[i].dataSize);
-            BinaryReader_readBytes(reader, a->entries[i].data, a->entries[i].dataSize);
+#ifndef PLATFORM_PS2
+            if (dw->mmapBase != nullptr) {
+                a->entries[i].data = mmapSlice(dw, a->entries[i].dataOffset, a->entries[i].dataSize);
+            } else
+#endif
+            {
+                a->entries[i].data = (uint8_t *)safeMalloc(a->entries[i].dataSize);
+                BinaryReader_readBytes(reader, a->entries[i].data, a->entries[i].dataSize);
+            }
         } else {
             a->entries[i].data = nullptr;
         }
@@ -2551,13 +2619,29 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
     // Allocate and zero-initialize DataWin
     DataWin* dw = (DataWin *)safeCalloc(1, sizeof(DataWin));
 
+#ifndef PLATFORM_PS2
+    // Try to mmap the whole file (private/copy-on-write, so writes never touch the actual
+    // file -- see mapWholeFile for why the mapping needs to be writable at all). When this
+    // succeeds, STRG/CODE/TXTR/AUDO data is addressed directly out of the mapping instead of
+    // being copied into the heap, and the OS page cache handles bringing pages in/out instead
+    // of us managing owned buffers. Falls back to the normal streaming/copy path below if mmap
+    // isn't available for some reason (e.g. the underlying filesystem doesn't support it).
+    dw->mmapBase = mapWholeFile(file, fileSize);
+    dw->mmapSize = (dw->mmapBase != nullptr) ? fileSize : 0;
+#endif
+
     BinaryReader reader = BinaryReader_create(file, (size_t) fileSize);
 
     // Some WAD files, such as ones made with https://github.com/AlexWaveDiver/TranslaTale (I think?) have pointers inside a chunk pointing to data in OTHER chunks
     // The original runner doesn't care because it loads the entire file in memory up front, so we do the same if asked
     // (we don't do that by default because some low end platforms would NOT be able to handle it)
     uint8_t* wholeFileData = nullptr;
-    if (options.loadType == DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME) {
+    if (dw->mmapBase != nullptr) {
+        // The mmap already gives us the same "whole file addressable" property that
+        // DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME exists for, without the malloc+fread
+        // copy, so it takes priority over that option whenever it's available.
+        BinaryReader_setBuffer(&reader, (uint8_t*) dw->mmapBase, 0, fileSize);
+    } else if (options.loadType == DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME) {
         wholeFileData = (uint8_t *)safeMalloc((size_t) fileSize);
         safeFread(wholeFileData, fileSize, file, filePath);
         BinaryReader_setBuffer(&reader, wholeFileData, 0, (size_t) fileSize);
@@ -2592,7 +2676,14 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
 
         if (options.parseStrg && memcmp(chunkName, "STRG", 4) == 0) {
             dw->strgBufferBase = chunkDataStart;
-            dw->strgBuffer = BinaryReader_readBytesAt(&reader, chunkDataStart, chunkLength);
+#ifndef PLATFORM_PS2
+            if (dw->mmapBase != nullptr) {
+                dw->strgBuffer = mmapSlice(dw, chunkDataStart, chunkLength);
+            } else
+#endif
+            {
+                dw->strgBuffer = BinaryReader_readBytesAt(&reader, chunkDataStart, chunkLength);
+            }
         }
 
         if ((memcmp(chunkName, "CODE", 4) == 0) && chunkLength > 0) {
@@ -2673,9 +2764,13 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
             (options.parseAudo && memcmp(chunkName, "AUDO", 4) == 0) ||
             (memcmp(chunkName, "ACRV", 4) == 0);
 
-        // Bulk-read the chunk data into memory for fast parsing
+        // Bulk-read the chunk data into memory for fast parsing.
+        // Skipped when the reader is already buffer-backed by the whole-file mmap (or, as
+        // before, by DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME's malloc'd copy) -- in
+        // either case the reader already has direct, cheap access to every offset, so there's
+        // nothing to gain from a second, transient copy of just this chunk.
         uint8_t* chunkBuffer = nullptr;
-        if (shouldParse && chunkLength > 0 && options.loadType != DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME) {
+        if (shouldParse && chunkLength > 0 && options.loadType != DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME && dw->mmapBase == nullptr) {
             chunkBuffer = (uint8_t *)malloc(chunkLength);
             if (chunkBuffer) {
                 size_t read = fread(chunkBuffer, 1, chunkLength, reader.file);
@@ -2763,7 +2858,7 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
         }
 
         // Seek to chunk end (skip any unread data or trailing padding)
-        if (options.loadType == DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME) {
+        if (options.loadType == DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME || dw->mmapBase != nullptr) {
             BinaryReader_seek(&reader, chunkEnd);
         } else {
             fseek(reader.file, (long) chunkEnd, SEEK_SET);
@@ -2987,23 +3082,33 @@ void DataWin_free(DataWin* dw) {
 
     // TXTR
     if (dw->txtr.textures) {
-        repeat(dw->txtr.count, i) {
-            free(dw->txtr.textures[i].blobData);
+        // When mmap is active, blobData is a slice into dw->mmapBase, not an owned
+        // allocation -- freeing it would be undefined behavior. The whole mapping is
+        // released once, below, instead.
+        if (dw->mmapBase == nullptr) {
+            repeat(dw->txtr.count, i) {
+                free(dw->txtr.textures[i].blobData);
+            }
         }
         free(dw->txtr.textures);
     }
 
     // AUDO
     if (dw->audo.entries) {
-        repeat(dw->audo.count, i) {
-            free(dw->audo.entries[i].data);
+        // Same reasoning as TXTR above: data is a mmap slice when mmap is active.
+        if (dw->mmapBase == nullptr) {
+            repeat(dw->audo.count, i) {
+                free(dw->audo.entries[i].data);
+            }
         }
         free(dw->audo.entries);
     }
 
-    // Owned buffers
-    free(dw->strgBuffer);
-    free(dw->bytecodeBuffer);
+    // Owned buffers (or, when mmap is active, slices into dw->mmapBase -- see below)
+    if (dw->mmapBase == nullptr) {
+        free(dw->strgBuffer);
+        free(dw->bytecodeBuffer);
+    }
 
     // Close the lazy-load file handle (only open when lazyLoadRooms/lazyLoadTextures was enabled)
     if (dw->lazyLoadFile != nullptr) {
@@ -3011,6 +3116,16 @@ void DataWin_free(DataWin* dw) {
         dw->lazyLoadFile = nullptr;
     }
     free(dw->lazyLoadFilePath);
+
+#ifndef PLATFORM_PS2
+    // Releases strgBuffer, bytecodeBuffer, every TXTR blobData, and every AUDO data pointer
+    // in one shot, since they're all just slices of this single mapping.
+    if (dw->mmapBase != nullptr) {
+        munmap(dw->mmapBase, dw->mmapSize);
+        dw->mmapBase = nullptr;
+        dw->mmapSize = 0;
+    }
+#endif
 
     free(dw);
 }
