@@ -31,12 +31,48 @@ static const char* readStringPtr(BinaryReader* reader, DataWin* dw) {
 
 #ifndef PLATFORM_PS2
 
-static void* mapWholeFile(FILE* file, size_t fileSize) {
+void *mapWholeFile(FILE *file, size_t size) {
+    if (!file || size == 0) return NULL;
+
+#if defined(_WIN32)
+    intptr_t osHandle = _get_osfhandle(_fileno(file));
+    if (osHandle == -1) return NULL;
+    HANDLE hFile = (HANDLE)osHandle;
+
+    // PAGE_WRITECOPY + FILE_MAP_COPY = private, copy-on-write mapping (POSIX MAP_PRIVATE
+    // equivalent). Writes stay local to this process and never reach the file on disk.
+    HANDLE hMap = CreateFileMappingA(
+        hFile,
+        NULL,
+        PAGE_WRITECOPY,
+        0, 0,
+        NULL
+    );
+    if (!hMap) return NULL;
+
+    void *ptr = MapViewOfFile(
+        hMap,
+        FILE_MAP_COPY,
+        0, 0,
+        size
+    );
+    CloseHandle(hMap);
+
+    if (!ptr) return NULL;
+    return ptr;
+#elif defined(_POSIX_MAPPED_FILES) && _POSIX_MAPPED_FILES > 0
     int fd = fileno(file);
-    if (fd < 0) return nullptr;
-    void* base = mmap(nullptr, fileSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (base == MAP_FAILED) return nullptr;
-    return base;
+    if (fd == -1) return NULL;
+
+    // MAP_PRIVATE: copy-on-write. Works with a read-only fd (unlike MAP_SHARED, which would
+    // require O_RDWR and would write patched bytecode straight back into the real file).
+    void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (ptr == MAP_FAILED) return NULL;
+
+    return ptr;
+#else
+    return NULL;
+#endif
 }
 
 static uint8_t* mmapSlice(DataWin* dw, size_t offset, size_t length) {
@@ -3121,14 +3157,18 @@ void DataWin_free(DataWin* dw) {
     // Releases strgBuffer, bytecodeBuffer, every TXTR blobData, and every AUDO data pointer
     // in one shot, since they're all just slices of this single mapping.
     if (dw->mmapBase != nullptr) {
+#ifdef _WIN32
+        UnmapViewOfFile(dw->mmapBase);
+#elif defined(_POSIX_MAPPED_FILES) && _POSIX_MAPPED_FILES > 0
         munmap(dw->mmapBase, dw->mmapSize);
-        dw->mmapBase = nullptr;
-        dw->mmapSize = 0;
-    }
 #endif
+    }
+    dw->mmapBase = nullptr;
+    dw->mmapSize = 0;
 
     free(dw);
 }
+#endif
 
 // ===[ Lazy Room Payload ]===
 
