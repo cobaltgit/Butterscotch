@@ -2656,14 +2656,10 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
     DataWin* dw = (DataWin *)safeCalloc(1, sizeof(DataWin));
 
 #ifndef PLATFORM_PS2
-    // Try to mmap the whole file (private/copy-on-write, so writes never touch the actual
-    // file -- see mapWholeFile for why the mapping needs to be writable at all). When this
-    // succeeds, STRG/CODE/TXTR/AUDO data is addressed directly out of the mapping instead of
-    // being copied into the heap, and the OS page cache handles bringing pages in/out instead
-    // of us managing owned buffers. Falls back to the normal streaming/copy path below if mmap
-    // isn't available for some reason (e.g. the underlying filesystem doesn't support it).
-    dw->mmapBase = mapWholeFile(file, fileSize);
-    dw->mmapSize = (dw->mmapBase != nullptr) ? fileSize : 0;
+    if (options.loadType == DATAWINLOADTYPE_MMAP) {
+        dw->mmapBase = mapWholeFile(file, fileSize);
+        dw->mmapSize = (dw->mmapBase != nullptr) ? fileSize : 0;
+    }
 #endif
 
     BinaryReader reader = BinaryReader_create(file, (size_t) fileSize);
@@ -2673,9 +2669,6 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
     // (we don't do that by default because some low end platforms would NOT be able to handle it)
     uint8_t* wholeFileData = nullptr;
     if (dw->mmapBase != nullptr) {
-        // The mmap already gives us the same "whole file addressable" property that
-        // DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME exists for, without the malloc+fread
-        // copy, so it takes priority over that option whenever it's available.
         BinaryReader_setBuffer(&reader, (uint8_t*) dw->mmapBase, 0, fileSize);
     } else if (options.loadType == DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME) {
         wholeFileData = (uint8_t *)safeMalloc((size_t) fileSize);

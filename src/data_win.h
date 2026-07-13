@@ -15,7 +15,8 @@ typedef struct DataWin DataWin;
 
 typedef enum {
     DATAWINLOADTYPE_LOAD_PER_CHUNK,
-    DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME
+    DATAWINLOADTYPE_LOAD_IN_MEMORY_AHEAD_OF_TIME,
+    DATAWINLOADTYPE_MMAP
 } DataWinLoadType;
 
 typedef struct {
