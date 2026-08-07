@@ -1,4 +1,4 @@
-#version 300 es
+#version 320 es
 
 // A simple CRT shader that *evokes* the feeling of a CRT, because real CRT shaders don't look that good on a phone
 precision highp float;

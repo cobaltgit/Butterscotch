@@ -162,7 +162,7 @@ fun LauncherScreen(
         topBar = {
             ButterscotchTopBar(
                 title = {
-                    Text("Butterscotch")
+                    Text("Spaghetti")
                 },
                 nav = nav,
                 actions = {
@@ -179,36 +179,6 @@ fun LauncherScreen(
                             onClick = {
                                 menuExpanded = false
                                 nav.navigate(Route.GeneralSettings)
-                            },
-                        )
-
-                        DropdownMenuItem(
-                            leadingIcon = { Icon(painterResource(R.drawable.discord), contentDescription = null, modifier = Modifier.size(24.dp)) },
-                            text = { Text("Discord Community") },
-                            onClick = {
-                                menuExpanded = false
-                                val intent = Intent(Intent.ACTION_VIEW, "https://discord.gg/2gQR7t3WJR".toUri())
-                                context.startActivity(intent)
-                            },
-                        )
-
-                        DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                            text = { Text("Loritta") },
-                            onClick = {
-                                menuExpanded = false
-                                val intent = Intent(Intent.ACTION_VIEW, "https://loritta.website/".toUri())
-                                context.startActivity(intent)
-                            },
-                        )
-
-                        DropdownMenuItem(
-                            leadingIcon = { Icon(painterResource(R.drawable.pickaxe), contentDescription = null, modifier = Modifier.size(24.dp)) },
-                            text = { Text("SparklyPower") },
-                            onClick = {
-                                menuExpanded = false
-                                val intent = Intent(Intent.ACTION_VIEW, "https://sparklypower.net/".toUri())
-                                context.startActivity(intent)
                             },
                         )
 
@@ -248,7 +218,7 @@ fun LauncherScreen(
                 ButterscotchBobImage(R.drawable.butterscotch_logo, "Butterscotch logo")
 
                 Text(
-                    "Welcome to Butterscotch!",
+                    "Welcome to Spaghetti!",
                     style = MaterialTheme.typography.headlineLarge,
                     textAlign = TextAlign.Center
                 )
@@ -322,9 +292,17 @@ private fun GameTile(
                     Text(entry.title, style = MaterialTheme.typography.titleMedium.copy(lineHeight = 20.sp))
                     Text(
                         when (entry.gameType) {
-                            is GameEntry.GameType.GameMakerStudio -> "GM:S (WAD Version ${entry.gameType.wadVersion})"
-                        },
-                        style = MaterialTheme.typography.bodySmall
+                            is GameEntry.GameType.GameMakerStudio ->
+                                "GM:S (WAD Version ${entry.gameType.wadVersion})"
+                            is GameEntry.GameType.Flash ->
+                                "Adobe Flash"
+                            is GameEntry.GameType.RPGMaker ->
+                                "RPG Maker XP / VX / VX Ace"
+                            is GameEntry.GameType.OldRPGM ->
+                                "RPG Maker 2000 / 2003"
+                            is GameEntry.GameType.Html ->
+                                "HTML5"
+                        }
                     )
                 }
             }

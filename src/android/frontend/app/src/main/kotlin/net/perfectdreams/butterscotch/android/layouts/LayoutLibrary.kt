@@ -51,27 +51,53 @@ class LayoutLibrary private constructor(
                 emptyList()
             }
 
-            // To avoid upgrading issues, we WON'T persist the default gamepads on the config
-            val realInitial = mutableListOf(
-                context.assets.open("layouts/default_portrait.json").readBytes().toString(Charsets.UTF_8)
-                    .let {
-                        Json.decodeFromString<GamepadLayout>(it)
-                            .copy(
-                                id = DEFAULT_PORTRAIT_LAYOUT,
-                                fancyName = "Default Portrait",
-                            )
-                    },
-                context.assets.open("layouts/default_landscape.json").readBytes().toString(Charsets.UTF_8)
-                    .let {
-                        Json.decodeFromString<GamepadLayout>(it)
-                            .copy(
-                                id = DEFAULT_LANDSCAPE_LAYOUT,
-                                fancyName = "Default Landscape",
-                            )
-                    }
-            )
+// To avoid upgrading issues, we WON'T persist the default gamepads on the config
+val realInitial = mutableListOf<GamepadLayout>()
 
-            realInitial.addAll(initial)
+// Keep the two built-in defaults with fixed IDs.
+realInitial += context.assets.open("layouts/default_portrait.json")
+    .readBytes()
+    .toString(Charsets.UTF_8)
+    .let {
+        Json.decodeFromString<GamepadLayout>(it).copy(
+            id = DEFAULT_PORTRAIT_LAYOUT,
+            fancyName = "Default Portrait",
+        )
+    }
+
+realInitial += context.assets.open("layouts/default_landscape.json")
+    .readBytes()
+    .toString(Charsets.UTF_8)
+    .let {
+        Json.decodeFromString<GamepadLayout>(it).copy(
+            id = DEFAULT_LANDSCAPE_LAYOUT,
+            fancyName = "Default Landscape",
+        )
+    }
+
+// Load every additional layout bundled in assets/layouts.
+context.assets.list("layouts")?.forEach { file ->
+    if (!file.endsWith(".json")) return@forEach
+    if (file == "default_portrait.json" || file == "default_landscape.json") return@forEach
+
+    try {
+        val layout = context.assets.open("layouts/$file")
+            .readBytes()
+            .toString(Charsets.UTF_8)
+            .let { Json.decodeFromString<GamepadLayout>(it) }
+
+        // Avoid duplicate IDs.
+        if (realInitial.none { it.id == layout.id }) {
+            realInitial += layout
+        } else {
+            Log.w(TAG, "Skipping bundled layout \"$file\" because its UUID is already in use.")
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load bundled layout: $file", e)
+    }
+}
+
+realInitial.addAll(initial)
 
             return LayoutLibrary(indexFile, File(rootDir, SPRITES_DIR_NAME), realInitial)
         }

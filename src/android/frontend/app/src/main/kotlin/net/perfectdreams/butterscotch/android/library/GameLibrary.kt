@@ -20,7 +20,7 @@ import java.util.UUID
  * filesDir/butterscotch/
  *   library.json
  *   games/<id>/
- *     bundle/        <- contains the WAD file (data.win / game.unx / …) and any sibling assets
+ *     bundle/        <- contains the primary game payload and any sibling assets
  *     saves/
  *       <slotId>/    <- one folder per save slot, UUID-named so renames/deletes don't
  *                       shuffle indices
@@ -29,7 +29,7 @@ import java.util.UUID
  * Not thread-safe — call from the UI thread. The library is tiny (one row per game) so we just
  * rewrite the whole JSON file on each mutation; no DB, no diffing.
  *
- * [entries] is a [androidx.compose.runtime.snapshots.SnapshotStateList] — composables reading it recompose automatically when
+ * [entries] is a [SnapshotStateList] — composables reading it recompose automatically when
  * [commit]/[remove] mutate the list, so screens that share a single [GameLibrary] instance stay in
  * sync without needing lifecycle-based refresh tricks.
  */
@@ -54,12 +54,28 @@ class GameLibrary private constructor(
     fun logsDir(entry: GameEntry): File = File(gameDir(entry.id), "logs")
     fun logsDir(entryId: UUID): File = File(gameDir(entryId), "logs")
 
-    fun wadPath(entry: GameEntry): File = File(
+    /**
+     * Legacy name kept for the current runner path. Once the plugin flow is fully wired in, the
+     * call sites that care about non-GameMaker engines can move to [primaryFile] directly.
+     */
+    fun wadPath(entry: GameEntry): File = primaryFile(entry)
+
+    /**
+     * Returns the main file that should be used to launch the game for the current engine.
+     * GameMaker keeps the original WAD file, Flash keeps the SWF, HTML keeps the entry HTML, and
+     * the RPG Maker-based entries resolve from the bundle root for now.
+     */
+    fun primaryFile(entry: GameEntry): File = File(
         bundleDir(entry),
-        when (entry.gameType) {
-            is GameEntry.GameType.GameMakerStudio -> entry.gameType.filename
+        when (val type = entry.gameType) {
+            is GameEntry.GameType.GameMakerStudio -> type.wadFileName
+            is GameEntry.GameType.Flash -> type.swfFileName
+            is GameEntry.GameType.RPGMaker -> "Game.exe"
+            is GameEntry.GameType.OldRPGM -> "Game"
+            is GameEntry.GameType.Html -> type.entryFileName
         }
     )
+
     fun gameDir(id: UUID): File = File(rootDir, "games/data/$id")
 
     /** Per-game derived assets (icon, future thumbnails). Separate from `data/` so we can rebuild them. */
@@ -119,6 +135,7 @@ class GameLibrary private constructor(
                     fancyName = "Default",
                 )
             ),
+            iconRevision = 0,
             portraitLayout = portraitLayout,
             landscapeLayout = landscapeLayout,
             runnerOs = runnerOs,
@@ -128,7 +145,6 @@ class GameLibrary private constructor(
             postProcessing = postProcessing,
         )
         entries.add(entry)
-        // Sync order after adding a new entry
         syncOrder()
 
         if (icon != null) {
@@ -146,10 +162,9 @@ class GameLibrary private constructor(
         gameDir(staged.id).deleteRecursively()
     }
 
-    fun update(id: UUID, block: (GameEntry) -> (GameEntry)) {
+    fun update(id: UUID, block: (GameEntry) -> GameEntry) {
         val index = entries.indexOfFirst { it.id == id }
-        if (index == -1)
-            error("Trying to update a entry that doesn't exist! $id")
+        if (index == -1) error("Trying to update a entry that doesn't exist! $id")
         entries[index] = block.invoke(entries[index])
         save()
     }
@@ -189,7 +204,6 @@ class GameLibrary private constructor(
                 return
             }
         }
-        // Bump revision so observers (notably GameIcon's remember cache) recompose.
         update(id) { it.copy(iconRevision = it.iconRevision + 1) }
         save()
     }
