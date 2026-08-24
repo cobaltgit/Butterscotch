@@ -327,12 +327,12 @@ void platformSetNextFramebuffer(uint32_t* framebuffer, int width, int height) {
         framebuffer,
         width,
         height,
-        32,
-        width * 4,
-        0x00ff0000, // Rmask
-        0x0000ff00, // Gmask
-        0x000000ff, // Bmask
-        0x00000000  // Amask
+        16,
+        width * 2,
+        0x7C00, // Rmask
+        0x03E0, // Gmask
+        0x001F, // Bmask
+        0x0000  // Amask
     );
 }
 
