@@ -194,6 +194,18 @@ ifneq ($(OS),Windows)
 LIBS += -pthread
 endif
 endif
+ifeq ($(AUDIO_BACKEND),sdl1)
+ifneq ($(BACKEND),sdl1)
+$(error AUDIO_BACKEND=sdl1 requires BACKEND=sdl1)
+endif
+INCLUDES += $(INCLUDE)src/audio/sdl1 $(INCLUDE)src/audio/miniaudio $(INCLUDE)vendor/miniaudio
+DEFINES += $(DEFINE)USE_SDL1_AUDIO
+SRCS += $(wildcard src/audio/sdl1/*.c) $(wildcard src/audio/miniaudio/*.c)
+HEADERS += $(wildcard src/audio/sdl1/*.h) $(wildcard src/audio/miniaudio/*.h)
+ifneq ($(OS),Windows)
+LIBS += -pthread
+endif
+endif
 ifeq ($(AUDIO_BACKEND),openal)
 INCLUDES += $(INCLUDE)src/audio/openal
 DEFINES += $(DEFINE)USE_OPENAL

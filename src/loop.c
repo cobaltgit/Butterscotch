@@ -48,10 +48,12 @@
 #include "sw_renderer.h"
 #endif
 #include "overlay_file_system.h"
-#if defined(USE_OPENAL)
-#include "al_audio_system.h"
+#if defined(USE_SDL1_AUDIO)
+#include "sdl_audio_system.h"
 #elif defined(USE_MINIAUDIO)
 #include "ma_audio_system.h"
+#elif defined(USE_OPENAL)
+#include "al_audio_system.h"
 #endif
 #include "noop_audio_system.h"
 #include "stb_ds.h"
@@ -524,7 +526,7 @@ int loop(CommandLineArgs args, const char *argv0) {
             options.parseTxtr = false;
         } while(0);
 #endif
-#if defined(USE_MINIAUDIO) || defined(USE_OPENAL)
+#if defined(USE_SDL1_AUDIO) || defined(USE_MINIAUDIO) || defined(USE_OPENAL)
         if (!args.headless)
             options.parseAudo = true;
 #endif
@@ -868,10 +870,12 @@ int loop(CommandLineArgs args, const char *argv0) {
         if (args.headless) {
             audioSystem = (AudioSystem*) NoopAudioSystem_create();
         } else {
-#if defined(USE_OPENAL)
-            audioSystem = (AudioSystem*) AlAudioSystem_create();
+#if defined(USE_SDL1_AUDIO)
+            audioSystem = (AudioSystem*) SdlAudioSystem_create(dataWin);
 #elif defined(USE_MINIAUDIO)
             audioSystem = (AudioSystem*) MaAudioSystem_create(dataWin);
+#elif defined(USE_OPENAL)
+            audioSystem = (AudioSystem*) AlAudioSystem_create();
 #else
             audioSystem = (AudioSystem*) NoopAudioSystem_create();
 #endif

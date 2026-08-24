@@ -362,6 +362,12 @@ void *platformGetProcAddress(const char *name) {
 #endif
 
 static int32_t SDLKeyToGml(int sdlkey) {
+    // miyoomini controls for undertale hacky wacky
+    switch (sdlkey) {
+        case SDLK_SPACE: return toupper('z');
+        case SDLK_LCTRL: return toupper('x');
+        case SDLK_LSHIFT: return toupper('c');
+    }
     // Letters and numbers are the same as GML
     if (sdlkey >= 'a' && sdlkey <= 'z') return toupper(sdlkey);
     if (sdlkey >= '0' && sdlkey <= '9') return sdlkey;

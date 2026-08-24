@@ -49,4 +49,13 @@ typedef struct {
 
 MaAudioSystem* MaAudioSystem_create(DataWin* dataWin);
 
+// Shared post-engine setup: resets instance slots and creates the listener sound
+// groups. Requires an initialized engine. Used by init and by backends that overlay
+// this one (e.g. the SDL 1.2 backend).
+void MaAudioSystem_resetState(MaAudioSystem* ma);
+
+// Returns this backend's vtable, for overlay backends that inherit it and override
+// individual functions.
+const AudioSystemVtable* MaAudioSystem_vtable(void);
+
 #endif /* _BS_MA_AUDIO_SYSTEM_H_ */
